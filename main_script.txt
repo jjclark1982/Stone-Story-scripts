@@ -1,0 +1,633 @@
+// The Mind Stone is a powerful relic, beyond
+// control of most who attempt to use it.
+
+// When powered on, the Mind Stone continuously
+// executes instructions given to it.
+// Instructions must be scribed in Stonescript.
+// Learn more at:
+// StoneStoryRPG.com/stonescript
+// -Bezerra, the Sage
+
+// import Cosmetics/Hats/Skully
+// import Cosmetics/PetBoo
+
+// import Cosmetics/SleepyStonehead
+// import Cosmetics/PetSnowBunny
+// import Cosmetics/PetSnowman
+
+// TODO: make a state machine for "go slow and regen" vs "go fast"
+// TODO: craft separate fire weapons for debuff / damage (maybe wand / sword)
+
+
+// for key : storage.Keys()
+//   storage.Delete(key)
+
+var most_foes_key
+most_foes_key = string.Format("most_foes_{0}_{1}", loc.id, loc.stars)
+var most_foes = int.Parse(storage.Get(most_foes_key, "0"))
+?foe.count > most_foes & foe ! boss
+  most_foes = foe.count
+  storage.Set(most_foes_key, string.Format("{0}", most_foes))
+most_foes = math.Clamp(most_foes, 5, 15)
+// >`@screen.w-20@,@screen.h-6@,Foes  = @foe.count@ / @most_foes@
+
+
+func GetStrongElement()
+  ?foe = ice
+    return "fire"
+  :?foe = fire
+    return "aether"
+  :?foe = aether
+    return "vigor"
+  :?foe = vigor
+    return "poison"
+  :?foe = poison
+    return "ice"
+  :
+    return ""
+
+
+func DashForward()
+  ?foe.distance < 10 // | foe.distance > 16
+    return false
+
+  // dashing shield automatically dashes to nearby foes
+  :?item.GetCooldown("dash") <= 0 & foe = immune_to_stun
+    equipR dashing shield
+    return true
+
+  // quarterstaff (2-handed) activation: mini-dash attack that applies stun
+  :?item.GetCooldown("quarterstaff") <= 0 & item.CanActivate() & foe ! immune_to_stun
+    equip quarterstaff
+    activate R
+    return true
+
+  // bashing shield (lost item) automatically dashes into nearby enemies, applying stun and gaining armor
+  :?item.GetCooldown("bash") <= 0 & foe ! immune_to_stun
+    equipR bashing shield
+    return true
+
+  // dashing shield automatically dashes to nearby foes
+  // (check again in case foe ! immune_to_stun but others are on cooldown)
+  :?item.GetCooldown("dash") <= 0
+    equipR dashing shield
+    return true
+  :
+    return false
+
+
+var prevDodgeTime = 0
+?loc.loop
+  prevDodgeTime = 0
+// >`0,10,time since dodge: @time - prevDodgeTime@
+
+
+func DodgeForward()
+  ?time - prevDodgeTime < 30
+    return true
+  ?buffs = invisibility
+    return true
+  :?foe = poena
+    // TODO: be close enough for this to work
+    return false
+  :?DashForward()
+    prevDodgeTime = time
+    return true
+  :
+    return false
+
+
+func DodgeBackward()
+  ?time - prevDodgeTime < 30
+    return true
+  ?buffs = invisibility
+    return true
+  // the Mind Stone dodges backward when equipped
+  ?item.GetCooldown("mind") <= 0 & item.CanActivate()
+    equipL mind
+    prevDodgeTime = time
+    return true
+  :
+    return false
+
+
+func DodgeEitherWay()
+  // skip dodging if it has happened very recently
+  ?time - prevDodgeTime < 30
+    return true
+  ?buffs = invisibility
+    return true
+  ?DodgeForward()
+    prevDodgeTime = time
+    return true
+  :?DodgeBackward()
+    prevDodgeTime = time
+    return true
+  :?item.potion = invisibility & foe = boss
+    activate potion
+    prevDodgeTime = time
+    return true
+  :
+    return false
+
+
+func AttackWithStun()
+  ?foe.debuffs.string = stun
+    return false
+  ?foe = immune_to_stun
+    return false
+  ?foe = poena
+    return false
+    
+  // quarterstaff (2-handed) activation: mini-dash attack that applies stun
+  ?item.GetCooldown("quarterstaff") <= 0 & item.CanActivate() & foe.distance >= 10 & foe.distance <= 16 & foe ! immune_to_stun & armor > 2
+    equip quarterstaff
+    activate R
+    return true
+
+  // bashing shield (lost item) automatically dashes into nearby enemies, applying stun and gaining armor
+  :?item.GetCooldown("bash") <= 0 & foe.distance >= 10 & foe.distance <= 16 & foe ! immune_to_stun
+    equipR bashing shield
+    return true
+
+  :?foe.distance <= 7 & foe ! immune_to_physical & foe ! immune_to_stun
+    equip heavy hammer
+    return true
+
+  // grappling hook (range 13) pushes foes away with splash and stun
+  :?foe.distance < 13 & foe ! immune_to_stun & foe ! immune_to_physical
+    equipL grappling hook
+    return true
+    
+  // TODO: elemental hammer, etc
+  
+  :
+    return false
+
+
+func AttackWithSplash()
+  var element = GetStrongElement()
+
+  ?foe = immune_to_physical
+    equipL @element@ wand
+
+  // use elemental splash when smite buff is active
+  :?buffs.string = smite & foe.distance <= 6
+    equipL @element@ big sword
+    return true
+
+  :?foe.distance <= 7 & foe ! immune_to_stun
+    equip heavy hammer
+    return true
+
+  :?foe.distance <= 9
+    equip bardiche
+    return true
+
+  :?foe.distance <= 6
+    equipL @element@ big sword
+    return true
+
+  // // grappling hook (range 13, damage 8) pushes foes away with splash and stun
+  // :?foe.distance < 13
+  //   equipL grappling hook
+  //   return true
+
+  // TODO: stone staff, etc
+  // TODO: compound shield
+  :
+      return false
+
+
+func AttackWithDebuffs()
+  ?foe ! boss
+    return false
+  ?foe = immune_to_debuff_damage
+    return false
+  ?foe = morel
+    return false
+  ?foe = poena
+    return false
+
+  // cultist mask activation applies poison
+  ?item.GetCooldown("mask") <= 0 & item.CanActivate()
+    equipR mask
+    activate R
+    return true
+  
+  :?need_armor = true
+    equipR compound shield
+  :
+    // moonstone increases attack speed
+    equipR moon
+
+  // fire debuff applies damage over time
+  ?foe.debuffs.string ! debuff_dot & foe ! immune_to_debuff_damage
+    equipL fire dF
+    return true
+
+  // poison debuff increases damage taken
+  :?foe.debuffs.string ! debuff_damage & foe ! immune_to_debuff_damage
+    equipL poison sword dP
+    return true
+
+  // ice debuff slows enemy
+  // :?foe.debuffs.string ! "debuff_chill:6"
+  :?foe.debuffs.count < 5
+    equipL ice sword dI
+    return true
+
+  :?AttackWithStun()
+    return true
+  
+  :
+    return false
+
+
+?ai.enabled
+  >`@screen.w-21@,0,Screen = @screen.i@:@screen.x@ + @pos.x@
+  //>`0,6,Cooldowns
+  //>`0,7,Mask = @item.GetCooldown("mask")@
+  // >`0,7,Bashing = @item.GetCooldown("bash")@
+  // >`0,8,Dashing = @item.GetCooldown("dash")@
+  // >`0,9,Bardiche = @item.GetCooldown("bardiche")@
+  // >`0,10,BFG = @item.GetCooldown("blade")@
+  // >`0,11,Hatchet = @item.GetCooldown("hatchet")@
+  // >`0,12,Mind Stone = @item.GetCooldown("mind")@
+  // >`0,13,Quarterstaff = @item.GetCooldown("quarterstaff")@
+  // >`0,14,Skeleton Arm = @item.GetCooldown("skeleton_arm")@
+
+  // >`0,@screen.h-3@,Buffs = @buffs.string@
+
+?ai.enabled & foe.count > 0
+  //?foe.count > 1
+  //  >`@screen.w-20@,@screen.h-5@,Count = @foe.count@
+  ?foe = phase1
+    >`@screen.w-20@,@screen.h-5@,Phase = 1
+  :?foe = phase2
+    >`@screen.w-20@,@screen.h-5@,Phase = 2
+  :?foe = phase3
+    >`@screen.w-20@,@screen.h-5@,Phase = 3
+  >`@screen.w-20@,@screen.h-4@,State = @foe.state@
+  >`@screen.w-20@,@screen.h-3@,Time  = @foe.time@
+  >`@screen.w-20@,@screen.h-6@,Foes  = @foe.count@ / @most_foes@
+  //>`@screen.w-20@,@screen.h-5@,Foes = @foe.count@
+  ?foe.distance < 9999
+    >`@screen.w-23@,@screen.h-2@,Distance = @foe.distance@
+  //var a
+  //?foe.debuffs.count > 0
+  //  a = string.Split(foe.debuffs.string, ',')
+  //  //for debuff : debuffs
+  //  for i = 0 .. a.Count()-1
+  //    >`@screen.w-30@,@screen.h-6-i@,@a[i]@
+  //>`0,10,debuffs: @foe.debuffs.string@
+
+
+// var foe_desc
+// foe_desc = string.Break(foe, 20)
+// for i = 0 .. foe_desc.Count()-1
+//     >`0,@i+10@,@foe_desc[i]@
+// // >`0,15,Foe: @foe_desc.Count()@
+// ?foe.immune_to_debuff_damage
+//     >10,18,immune_to_debuff_damage
+
+
+var need_armor = false
+?armor < 3
+  need_armor = true
+?armor > 6
+  need_armor = false
+// ?need_armor = true
+//  >`0,@screen.h-4@,need armor
+// ?need_hp = true
+//  >`0,@screen.h-3@,need HP
+
+var need_hp = false
+?hp < maxhp * 3 / 4
+  need_hp = true
+?hp > maxhp - 2
+  need_hp = false
+
+// >`0,@screen.h-6@,potion = @item.potion@
+
+
+//?hp < 15
+?hp < maxhp / 3
+  ?item.potion = defensive | item.potion = heal
+    activate potion
+
+var strong_summon = "aether"
+
+var strong_weapon
+strong_weapon = ""
+
+var strong_element
+strong_element = ""
+?foe = poison
+  strong_element = ice
+:?foe = vigor
+  strong_element = poison
+:?foe = aether
+  strong_element = vigor
+:?foe = fire
+  strong_element = aether
+  strong_summon = "aether"
+  // avoid aether talisman
+  strong_weapon = big sword
+:?foe = ice
+  strong_element = fire
+  strong_summon = "fire"
+  // avoid fire talisman
+  strong_weapon = big sword
+
+?foe = immune_to_physical
+  strong_weapon = wand
+:?foe = immune_to_ranged
+  strong_weapon = big sword
+:?foe.armor > 5
+  strong_weapon = hammer
+
+var strong_count
+strong_count = item.GetCount(string.Format("{0} {1}", strong_element, strong_weapon))
+// (@strong_count@)
+// ?ai.enabled & strong_element | strong_weapon
+  //>`0,@screen.h-4@,Summon = @summon.GetId()@
+  //, fire_talisman cooldown = @item.GetCooldown("fire_talisman")@
+  // >`0,@screen.h-2@,Strong Weapon = @strong_element@ @strong_weapon@
+
+
+// select off-hand item
+
+// >`0,12,@strong_summon@_talisman cd = @item.GetCooldown("aether_talisman")@
+?summon.count < 1 & item.CanActivate() & strong_summon = "aether" & item.GetCooldown("aether_talisman") <= 0
+  equipR @strong_summon@ talisman
+  activate R
+:?summon.count < 1 & item.CanActivate() & strong_summon = "fire" & item.GetCooldown("fire_talisman") <= 0
+  equipR @strong_summon@ talisman
+  activate R
+// :?armor < 8
+//   equipR compound shield
+:?foe = Big Booo & foe.count > 1
+// :?loc = halls & screen.i = 7 & foe.count >= 1
+  // R.I.Pieces mini-boss
+  equipR vigor big sword
+:?need_hp = true & foe.distance < 10
+  equipR vigor shield
+// :?foe = aether & foe.distance < 10 & foe ! boss
+//   equipR vigor shield
+:?foe.distance < 25
+  // gain armor when engaging
+  equipR @strong_element@ shield
+:?need_armor = true | (foe.distance > 20 & ai.walking & armor < 12)
+  // regen armor
+  equipR compound shield
+:?foe = ice & foe.distance < 10
+  equipR fire talisman
+:?foe = fire & foe.distance < 10
+  equipR aether talisman
+
+
+// select main hand item
+
+
+?foe.distance > 20 & ai.walking
+  ?need_hp = true
+    // regen hp
+    >`0,24,Walking slow to regen health
+    equipL ouroboros
+  :?need_armor = false
+    // walk faster
+    >`0,24,Walking fast
+    equipL triskelion
+
+:?foe.count >= most_foes * 0.9 & most_foes > 3 & item.GetCooldown("blade") <= 0 & item.CanActivate()
+  // BFG
+  >`0,24,Activating BFG
+  equip blade
+  activate R
+:?foe ! immune_to_physical & foe.distance > 10 & ai.walking & DashForward()
+  >`0,24,Dashing Forward
+:?AttackWithDebuffs()
+  >`0,24,Attacking with Debuffs
+:?AttackWithStun()
+  >`0,24,Attacking with Stun
+:?foe.count >= 3 & AttackWithSplash()
+  >`0,24,Attacking with Splash
+:?foe = boss & need_hp = true
+  >`0,24,Attacking with life leech
+  equipL vigor sword dL -big
+:
+  >`0,24,Attacking with strong weapon: @strong_element@ @strong_weapon@ 
+  equipL @strong_element@ @strong_weapon@ //+12
+
+
+// warm stone event
+// ?foe.distance > 7 & foe.distance < 25 & foe ! ranged & foe ! immune_to_ranged & foe ! immune_to_physical
+//     equipL stone
+
+
+// ?buffs.string = smite & foe ! immune_to_debuff_damage & foe.distance < 9
+//   ?foe.debuffs.string ! debuff_dot
+//     equipL fire big sword
+
+
+
+?loc = rocky
+  ?foe = boss // dysangelos
+    ?foe.armor > 50
+      equipL poison hammer
+    ?foe.state = 115 & foe.time > 65
+      ?item.GetCooldown("mind") <= 0
+        equipL mind
+      :?foe.distance > 12
+        equip repeating crossbow
+
+
+?loc = bronze_mine
+  ?foe = bomb & foe.distance <= 23
+    equip repeating crossbow
+  ?foe = guardian
+    equipL aether hammer
+    equipR vigor shield
+    equip aether crossbow
+    ?foe.state = 32 & foe.time > 30
+      DodgeBackward()
+
+var ceiling_decorator_timer = 0
+// >`0,17,ceiling_decorator_timer = @ceiling_decorator_timer@
+?loc = caves
+  ?loc.begin & item.potion ! defensive
+    brew stone + tar // defensive
+  ?foe = ceiling decorator
+    ?foe.distance > 10
+      equip repeating crossbow
+      //equip ice crossbow
+    ceiling_decorator_timer++
+    ?foe.state = 33 & foe.time = 0
+      ceiling_decorator_timer = 0
+    ?ceiling_decorator_timer = 25
+      DodgeEitherWay()
+    // ?foe.state = 33 & foe.time > 20 & item.GetCooldown("mind") <= 0
+    //   equipL mind
+  ?foe = bolesh & foe.state > 1
+    ?foe.distance > 10
+      ?need_armor = true & item.GetCooldown("quarterstaff") <= 0 & item.CanActivate()
+        equip quarterstaff
+        activate R
+      :
+        //equip repeating crossbow
+        equip ice crossbow
+    :?foe.state = 142 | foe.state = 143
+      ?item.GetCooldown("mind") <= 0
+        equipL mind
+      :
+        equip grap
+
+
+?loc = canyon
+  ?loc.begin & item.potion ! invis
+    brew stone + wood // invis
+  ?foe = wasp & foe.distance <= 22
+    equip repeating crossbow
+    // equip fire crossbow
+  ?foe = poena
+    ?foe.distance > 16
+      equip bardiche
+    :?foe.distance > 11 & buffs ! invisibility
+      equip repeating crossbow
+    :
+      equip bardiche
+    ?foe.state = 32 & foe.time = 41
+      DodgeEitherWay()
+      // ?item.GetCooldown("mind") <= 0 & buffs ! invisibility
+      //   equipL mind
+      // :?item.potion = invisibility
+      //   activate potion
+      //?foe.distance < 15
+      //:
+      //  equipR bashing
+      //  equipL aether big sword
+
+?loc = temple
+  ?foe = nagaraja
+    //?foe.state = 112 & foe.time > 60
+    //?foe.state = 105 & foe.time > 30
+    ?foe.distance > 15
+      equip repeating crossbow
+    ?foe.state = 112 | draw.GetSymbol(37, 10) = "("
+      DodgeBackward()
+    ?(draw.GetSymbol(29, 11) = "(" | draw.GetSymbol(27, 11) = "(") & (foe.hp < 9400 | foe.hp > 13000)
+      DodgeForward()
+    // ?foe.state > 100 & foe.time > 60
+    //   DodgeBackward()
+
+
+// Legend: the cauldron collective
+//?loc = halls
+//  ?loc.begin & item.potion ! vampiric
+//    brew bronze + tar // vampiric
+//  ?foe = pallas & foe = phase2 & foe.hp < 310
+//    activate potion
+
+?loc = halls
+  // R.I.Pieces
+  ?screen.i = 7 & foe.count >= 1
+    equipL vigor wand D +13
+    //equipR vigor wand dL +11
+    equipR vigor big sword
+  ?foe = pallas
+    // Legend: Transmutable Trials
+    //equipL broken talisman
+    // equipL big vigor sword
+    // equipL ice
+    ?foe = phase1 & foe.state = 32
+      equipL aether U
+    ?foe.count > 2
+      equip bardiche
+    ?foe = phase2 & foe.hp < 300
+      equip blade
+
+?loc = icy_ridge
+  ?foe = wall
+    ?item.GetCooldown("blade") <= 0
+      equip blade
+      ?item.CanActivate("blade")
+        activate R
+    :
+      equip bardiche
+
+
+// special weapons with cooldowns and costs
+
+// activate summon abilities
+for i = 0 .. summon.count 
+  ?summon.GetId(i) = "cinderwisp"
+    ?item.canActivate()
+      ?item.GetCooldown("cinderwisp") = 0 & foe.distance < 30 & foe.debuffs.count > 9 & summon.GetVar("ignition", i) > 2
+        equipR fire_talisman
+          activate cinderwisp
+  // ?summon.GetId(i) = "voidweaver"
+  //   ?item.canActivate()
+  //     ?item.GetCooldown("voidweaver") = 0 & foe.distance < 30 & foe.debuffs.count > 9 & summon.GetVar("ignition", i) > 2
+  //       equipR fire_talisman
+  //         activate voidweaver
+
+// use BFG against boss whenever ready
+?foe = boss & foe.count > 0 & foe.distance <= 11 & foe ! pallas & foe ! hrimnir
+  ?item.GetCooldown("blade") <= 0
+    equip blade
+    ?item.CanActivate("blade")
+      activate R
+
+// use nagaraja
+?loc.stars > 10 & item.GetCooldown("mask") <= 0 & foe.distance < 20 & foe ! poena & foe ! scarab // & foe.hp <= 6
+  equipR mask
+  ?item.CanActivate("mask")
+    activate R
+
+// maintain pick_pocket buff and steal as much as possible
+?foe.distance <= 7 & foe ! immune_to_physical
+  ?buffs.string ! "pick_pocket:5"
+    equip Skeleton Arm
+  :?item.GetCooldown("skeleton_arm") <= 0 & foe.hp < 32
+    equip Skeleton Arm
+    ?item.CanActivate("skeleton_arm")
+      activate R
+
+// use bardiche activation
+?foe = boss & foe.distance <= 9
+  ?item.GetCooldown("bardiche") <= 0 | item.GetCooldown("bardiche") > 870
+    equip bardiche
+    ?item.CanActivate("bardiche")
+      activate R
+
+
+// harvest and pickup resources
+?harvest=Boulder & harvest.distance < 7 & res.stone < 20000
+  equip shovel
+
+?harvest=Tree & harvest.distance < 7 & res.wood < 100000
+  equipR hatchet
+  ?item.GetCooldown("hatchet") <= 0 & item.CanActivate("hatchet")
+    activate R
+
+?pickup.distance < 10
+  equipL star
+
+
+// challenges
+
+?foe = bolesh & foe.hp < 300
+  ?foe.distance > 10
+    equipR dashing
+  :
+    equip blade
+
+//?foe ! immune_to_stun & foe ! immune_to_physical
+//  equipL aether hammer
+//  equipR mask
+
+
+// Legend: Summer Moonstice
+?foe = mosquito & foe.distance < 10
+  equipL aether hammer

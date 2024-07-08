@@ -8,16 +8,6 @@
 // StoneStoryRPG.com/stonescript
 // -Bezerra, the Sage
 
-// import Cosmetics/Hats/Skully
-// import Cosmetics/PetBoo
-
-// import Cosmetics/SleepyStonehead
-// import Cosmetics/PetSnowBunny
-// import Cosmetics/PetSnowman
-
-// TODO: make a state machine for "go slow and regen" vs "go fast"
-// TODO: craft separate fire weapons for debuff / damage (maybe wand / sword)
-
 
 // for key : storage.Keys()
 //   storage.Delete(key)
@@ -243,6 +233,7 @@ func AttackWithDebuffs()
   :
     return false
 
+// start of main script
 
 ?ai.enabled
   >`@screen.w-21@,0,Screen = @screen.i@:@screen.x@ + @pos.x@

@@ -412,15 +412,10 @@ strong_count = item.GetCount(string.Format("{0} {1}", strong_element, strong_wea
   equipL @strong_element@ @strong_weapon@ //+12
 
 
-// warm stone event
-// ?foe.distance > 7 & foe.distance < 25 & foe ! ranged & foe ! immune_to_ranged & foe ! immune_to_physical
-//     equipL stone
-
 
 // ?buffs.string = smite & foe ! immune_to_debuff_damage & foe.distance < 9
 //   ?foe.debuffs.string ! debuff_dot
 //     equipL fire big sword
-
 
 
 ?loc = rocky
@@ -513,13 +508,6 @@ var ceiling_decorator_timer = 0
     //   DodgeBackward()
 
 
-// Legend: the cauldron collective
-//?loc = halls
-//  ?loc.begin & item.potion ! vampiric
-//    brew bronze + tar // vampiric
-//  ?foe = pallas & foe = phase2 & foe.hp < 310
-//    activate potion
-
 ?loc = halls
   // R.I.Pieces
   ?screen.i = 7 & foe.count >= 1
@@ -527,10 +515,6 @@ var ceiling_decorator_timer = 0
     //equipR vigor wand dL +11
     equipR vigor big sword
   ?foe = pallas
-    // Legend: Transmutable Trials
-    //equipL broken talisman
-    // equipL big vigor sword
-    // equipL ice
     ?foe = phase1 & foe.state = 32
       equipL aether U
     ?foe.count > 2
@@ -555,12 +539,12 @@ for i = 0 .. summon.count
   ?summon.GetId(i) = "cinderwisp"
     ?item.canActivate()
       ?item.GetCooldown("cinderwisp") = 0 & foe.distance < 30 & foe.debuffs.count > 9 & summon.GetVar("ignition", i) > 2
-        equipR fire_talisman
+        equipL fire_talisman
           activate cinderwisp
   // ?summon.GetId(i) = "voidweaver"
   //   ?item.canActivate()
   //     ?item.GetCooldown("voidweaver") = 0 & foe.distance < 30 & foe.debuffs.count > 9 & summon.GetVar("ignition", i) > 2
-  //       equipR fire_talisman
+  //       equipL fire_talisman
   //         activate voidweaver
 
 // use BFG against boss whenever ready
@@ -619,6 +603,24 @@ for i = 0 .. summon.count
 //  equipR mask
 
 
-// Legend: Summer Moonstice
-?foe = mosquito & foe.distance < 10
-  equipL aether hammer
+// // Legend: Summer Moonstice
+// ?foe = mosquito & foe.distance < 10
+//   equipL aether hammer
+
+// Legend: the cauldron collective
+//?loc = halls
+//  ?loc.begin & item.potion ! vampiric
+//    brew bronze + tar // vampiric
+//  ?foe = pallas & foe = phase2 & foe.hp < 310
+//    activate potion
+
+// Legend: Transmutable Trials
+// ?foe = pallas
+//   equipL broken talisman
+//   equipL big vigor sword
+//   equipL ice
+
+
+// // Legend: Summer Moonstice: warm stone event
+// ?foe.distance > 7 & foe.distance < 25 & foe ! ranged & foe ! immune_to_ranged & foe ! immune_to_physical
+//     equipL stone

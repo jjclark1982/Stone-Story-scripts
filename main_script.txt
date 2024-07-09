@@ -37,6 +37,21 @@ func GetStrongElement()
     return ""
 
 
+func GetStrongWeapon()
+  var element = GetStrongElement()
+  var weapon = "-talisman"
+  ?foe = immune_to_physical
+    weapon = wand
+  :?foe = immune_to_ranged
+    weapon = big sword
+  :?foe.armor > 5
+    weapon = hammer
+
+  var criteria = string.Format("{0} {1} *10", element, weapon)
+  var count = item.GetCount(criteria)
+  return criteria
+
+
 func DashForward()
   ?foe.distance < 10 // | foe.distance > 16
     return false
@@ -75,7 +90,7 @@ var prevDodgeTime = 0
 func DodgeForward()
   ?time - prevDodgeTime < 30
     return true
-  ?buffs = invisibility
+  ?buffs.string = invisibility
     return true
   :?foe = poena
     // TODO: be close enough for this to work
@@ -90,7 +105,7 @@ func DodgeForward()
 func DodgeBackward()
   ?time - prevDodgeTime < 30
     return true
-  ?buffs = invisibility
+  ?buffs.string = invisibility
     return true
   // the Mind Stone dodges backward when equipped
   ?item.GetCooldown("mind") <= 0 & item.CanActivate()
@@ -105,7 +120,7 @@ func DodgeEitherWay()
   // skip dodging if it has happened very recently
   ?time - prevDodgeTime < 30
     return true
-  ?buffs = invisibility
+  ?buffs.string = invisibility
     return true
   ?DodgeForward()
     prevDodgeTime = time
@@ -205,12 +220,6 @@ func AttackWithDebuffs()
     activate R
     return true
   
-  :?need_armor = true
-    equipR compound shield
-  :
-    // moonstone increases attack speed
-    equipR moon
-
   // fire debuff applies damage over time
   ?foe.debuffs.string ! debuff_dot & foe ! immune_to_debuff_damage
     equipL fire dF
@@ -253,6 +262,8 @@ func AttackWithDebuffs()
 ?ai.enabled & foe.count > 0
   //?foe.count > 1
   //  >`@screen.w-20@,@screen.h-5@,Count = @foe.count@
+  ?foe = boss
+    >`@screen.w-25@,@screen.h-5@,Boss
   ?foe = phase1
     >`@screen.w-20@,@screen.h-5@,Phase = 1
   :?foe = phase2
@@ -262,6 +273,8 @@ func AttackWithDebuffs()
   >`@screen.w-20@,@screen.h-4@,State = @foe.state@
   >`@screen.w-20@,@screen.h-3@,Time  = @foe.time@
   >`@screen.w-20@,@screen.h-6@,Foes  = @foe.count@ / @most_foes@
+  ?encounter.isElite
+    >`@screen.w-20@,@screen.h-7@,@encounter.eliteMod@
   //>`@screen.w-20@,@screen.h-5@,Foes = @foe.count@
   ?foe.distance < 9999
     >`@screen.w-23@,@screen.h-2@,Distance = @foe.distance@
@@ -283,6 +296,16 @@ func AttackWithDebuffs()
 //     >10,18,immune_to_debuff_damage
 
 
+var strong_summon
+?loc = icy_ridge
+  strong_summon = "fire"
+:
+  strong_summon = "aether"
+
+var strong_element
+strong_element = GetStrongElement()
+
+
 var need_armor = false
 ?armor < 3
   need_armor = true
@@ -301,85 +324,57 @@ var need_hp = false
 
 // >`0,@screen.h-6@,potion = @item.potion@
 
-
 //?hp < 15
 ?hp < maxhp / 3
   ?item.potion = defensive | item.potion = heal
     activate potion
 
-var strong_summon = "aether"
-
-var strong_weapon
-strong_weapon = ""
-
-var strong_element
-strong_element = ""
-?foe = poison
-  strong_element = ice
-:?foe = vigor
-  strong_element = poison
-:?foe = aether
-  strong_element = vigor
-:?foe = fire
-  strong_element = aether
-  strong_summon = "aether"
-  // avoid aether talisman
-  strong_weapon = big sword
-:?foe = ice
-  strong_element = fire
-  strong_summon = "fire"
-  // avoid fire talisman
-  strong_weapon = big sword
-
-?foe = immune_to_physical
-  strong_weapon = wand
-:?foe = immune_to_ranged
-  strong_weapon = big sword
-:?foe.armor > 5
-  strong_weapon = hammer
-
-var strong_count
-strong_count = item.GetCount(string.Format("{0} {1}", strong_element, strong_weapon))
-// (@strong_count@)
-// ?ai.enabled & strong_element | strong_weapon
-  //>`0,@screen.h-4@,Summon = @summon.GetId()@
-  //, fire_talisman cooldown = @item.GetCooldown("fire_talisman")@
-  // >`0,@screen.h-2@,Strong Weapon = @strong_element@ @strong_weapon@
-
 
 // select off-hand item
 
 // >`0,12,@strong_summon@_talisman cd = @item.GetCooldown("aether_talisman")@
-?summon.count < 1 & item.CanActivate() & strong_summon = "aether" & item.GetCooldown("aether_talisman") <= 0
-  equipR @strong_summon@ talisman
+?summon.count = 0 & item.CanActivate() & strong_summon = "aether" & item.GetCooldown("aether_talisman") <= 0
+  >`0,25,Summoning voidweaver
+  equipR aether talisman
   activate R
-:?summon.count < 1 & item.CanActivate() & strong_summon = "fire" & item.GetCooldown("fire_talisman") <= 0
-  equipR @strong_summon@ talisman
+:?summon.count = 0 & item.CanActivate() & strong_summon = "fire" & item.GetCooldown("fire_talisman") <= 0
+  >`0,25,Summoning cinderwisp
+  equipR fire talisman
   activate R
 // :?armor < 8
 //   equipR compound shield
-:?foe = Big Booo & foe.count > 1
+:?foe = Big Booo & foe.distance < 10
 // :?loc = halls & screen.i = 7 & foe.count >= 1
   // R.I.Pieces mini-boss
+  >`0,25,Fighting off Big Booo
   equipR vigor big sword
 :?need_hp = true & foe.distance < 10
-  equipR vigor shield
+  >`0,25,Healing when attacked
+  equipR vigor shield ah *10
 // :?foe = aether & foe.distance < 10 & foe ! boss
 //   equipR vigor shield
 :?foe.distance < 25
   // gain armor when engaging
-  equipR @strong_element@ shield
-:?need_armor = true | (foe.distance > 20 & ai.walking & armor < 12)
+  >`0,25,Engaging to build armor
+  equipR @strong_element@ shield *10
+:?need_armor = true | (foe.distance > 20 & ai.walking & armor < 14)
   // regen armor
-  equipR compound shield
+  >`0,25,Building armor
+  equipR compound shield *10
 :?foe = ice & foe.distance < 10
+  >`0,25,Defending against ice damage
   equipR fire talisman
 :?foe = fire & foe.distance < 10
+  >`0,25,Defending against fire damage
   equipR aether talisman
+:?foe.distance < 10
+  // moondial stone increases attack speed
+  >`0,25,Boosting attack speed
+  equipR moon
+
 
 
 // select main hand item
-
 
 ?foe.distance > 20 & ai.walking
   ?need_hp = true
@@ -391,25 +386,37 @@ strong_count = item.GetCount(string.Format("{0} {1}", strong_element, strong_wea
     >`0,24,Walking fast
     equipL triskelion
 
-:?foe.count >= most_foes * 0.9 & most_foes > 3 & item.GetCooldown("blade") <= 0 & item.CanActivate()
-  // BFG
-  >`0,24,Activating BFG
+// use BFG against largest room of enemies
+:?item.GetCooldown("blade") <= 0 & item.CanActivate() & foe.count >= most_foes * 0.9
+  >`0,24,Activating BFG (foe count = @foe.count@ / @most_foes@)
   equip blade
   activate R
+
+// use BFG against boss whenever ready
+:?item.GetCooldown("blade") <= 0 & item.CanActivate() & foe = boss & foe.distance < 25 & loc ! halls & foe ! hrimnir
+  >`0,24,Activating BFG (boss)
+  equip blade
+  activate R
+
 :?foe ! immune_to_physical & foe.distance > 10 & ai.walking & DashForward()
-  >`0,24,Dashing Forward
+  >`0,24,Dashing forward
+
 :?AttackWithDebuffs()
-  >`0,24,Attacking with Debuffs
+  >`0,24,Attacking with debuffs
+
 :?AttackWithStun()
-  >`0,24,Attacking with Stun
+  >`0,24,Attacking with stun
+
 :?foe.count >= 3 & AttackWithSplash()
-  >`0,24,Attacking with Splash
+  >`0,24,Attacking with splash
+
 :?foe = boss & need_hp = true
   >`0,24,Attacking with life leech
   equipL vigor sword dL -big
-:
-  >`0,24,Attacking with strong weapon: @strong_element@ @strong_weapon@ 
-  equipL @strong_element@ @strong_weapon@ //+12
+
+:?foe
+  >`0,24,Attacking with strong weapon: @GetStrongWeapon()@
+  equipL @GetStrongWeapon()@
 
 
 
@@ -516,10 +523,15 @@ var ceiling_decorator_timer = 0
     equipR vigor big sword
   ?foe = pallas
     ?foe = phase1 & foe.state = 32
+      // unmake pallas arm
       equipL aether U
-    ?foe.count > 2
+    :?foe.count > 2
       equip bardiche
-    ?foe = phase2 & foe.hp < 300
+    :?foe = phase2 & foe.state = 33 & foe.time = 1
+      DodgeBackward()
+    :?foe = phase2 & foe.state = 33 & foe.time = 25
+      DodgeForward()
+    :?foe = phase2 & foe.hp < 350
       equip blade
 
 ?loc = icy_ridge
@@ -539,6 +551,7 @@ for i = 0 .. summon.count
   ?summon.GetId(i) = "cinderwisp"
     ?item.canActivate()
       ?item.GetCooldown("cinderwisp") = 0 & foe.distance < 30 & foe.debuffs.count > 9 & summon.GetVar("ignition", i) > 2
+        >`0,25,Activating cinderwisp
         equipL fire_talisman
           activate cinderwisp
   // ?summon.GetId(i) = "voidweaver"
@@ -547,12 +560,6 @@ for i = 0 .. summon.count
   //       equipL fire_talisman
   //         activate voidweaver
 
-// use BFG against boss whenever ready
-?foe = boss & foe.count > 0 & foe.distance <= 11 & foe ! pallas & foe ! hrimnir
-  ?item.GetCooldown("blade") <= 0
-    equip blade
-    ?item.CanActivate("blade")
-      activate R
 
 // use nagaraja
 ?loc.stars > 10 & item.GetCooldown("mask") <= 0 & foe.distance < 20 & foe ! poena & foe ! scarab // & foe.hp <= 6

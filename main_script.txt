@@ -12,6 +12,8 @@
 // for key : storage.Keys()
 //   storage.Delete(key)
 
+import AnimationCancel
+
 var most_foes_key
 most_foes_key = string.Format("most_foes_{0}_{1}", loc.id, loc.stars)
 var most_foes = int.Parse(storage.Get(most_foes_key, "0"))

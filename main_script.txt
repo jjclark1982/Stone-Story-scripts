@@ -12,6 +12,9 @@
 // for key : storage.Keys()
 //   storage.Delete(key)
 
+// var freeChest = import UI/freeChestTracker
+// freeChest.Main()
+
 import AnimationCancel
 
 var most_foes_key
@@ -20,7 +23,7 @@ var most_foes = int.Parse(storage.Get(most_foes_key, "0"))
 ?foe.count > most_foes & foe ! boss
   most_foes = foe.count
   storage.Set(most_foes_key, string.Format("{0}", most_foes))
-most_foes = math.Clamp(most_foes, 1, 15)
+// most_foes = math.Clamp(most_foes, 1, 15)
 // >`@screen.w-20@,@screen.h-6@,Foes  = @foe.count@ / @most_foes@
 
 
@@ -43,11 +46,14 @@ func GetStrongWeapon()
   var element = GetStrongElement()
   var weapon = "-talisman"
   ?foe = immune_to_physical
-    weapon = wand
+    weapon = "wand"
+  :?foe.armor > 10
+    weapon = "hammer"
+  :?foe.distance > 10 & foe ! ranged & foe ! immune_to_ranged & foe.count < 3
+    weapon = "repeating crossbow"
+    element = ""
   :?foe = immune_to_ranged
-    weapon = big sword
-  :?foe.armor > 5
-    weapon = hammer
+    weapon = "big sword"
 
   var criteria = string.Format("{0} {1} *10", element, weapon)
   var count = item.GetCount(criteria)
@@ -148,6 +154,8 @@ func AttackWithStun()
   ?foe.distance > 20
     return false
   ?foe = poena
+    return false
+  ?foe.hp < 40
     return false
     
   // quarterstaff (2-handed) activation: mini-dash attack that applies stun
@@ -335,7 +343,7 @@ var need_hp = false
 // >`0,@screen.h-6@,potion = @item.potion@
 
 //?hp < 15
-?hp < maxhp / 3
+?hp < maxhp / 3 & foe.count > 0
   ?item.potion = defensive | item.potion = heal
     activate potion
 
@@ -345,7 +353,7 @@ var need_hp = false
   // :?armor < 8
   //   equipR compound shield
   ?foe = Big Booo & foe.distance < 10
-  // :?loc = halls & screen.i = 7 & foe.count >= 1
+  // :?loc = undead_crypt & screen.i = 7 & foe.count >= 1
     // R.I.Pieces mini-boss
     >`0,@screen.h-3@,Fighting off Big Booo
     equipR vigor big sword
@@ -362,10 +370,10 @@ var need_hp = false
     // regen armor
     >`0,@screen.h-3@,Compound Shield: Build armor
     equipR compound shield *10
-  :?foe = ice & foe.distance < 10
+  :?foe = ice & foe.distance < 10 & foe.damage < 8
     >`0,@screen.h-3@,Fire Talisman: Defend ice damage
     equipR fire talisman
-  :?foe = fire & foe.distance < 10
+  :?foe = fire & foe.distance < 10 & foe.damage < 8
     >`0,@screen.h-3@,Aether Talisman: Defend fire damage
     equipR aether talisman
   :?foe.distance < 10
@@ -376,40 +384,66 @@ var need_hp = false
 
 // select main hand item
 
-// >`0,11,summon count = @summon.count@, time = @time@ / @main_hand_busy_time@
+// >`0,11,summon count = @summon.count@
+// >`0,11,busy time = @time@ / @main_hand_busy_time@
 // >`0,12,@strong_summon@_talisman cd = @item.GetCooldown("aether_talisman")@
 var main_hand_busy_time = 0
-?loc.begin | loc.loop | time = 0
+?loc.begin | loc.loop | time < 10
   main_hand_busy_time = 0
 var main_hand_busy_message = ""
 
 ?ai.enabled
   ?time < main_hand_busy_time
     >`0,@screen.h-2@,@main_hand_busy_message@
-  :?summon.count = 0 & item.CanActivate() & strong_summon = "aether" & item.GetCooldown("aether_talisman") <= 0
+  // :?item.left & item.left.state = 2
+  //   >`0,@screen.h-2@,@main_hand_busy_message@
+  // :?item.right & item.right.state = 2
+  //   >`0,@screen.h-2@,@main_hand_busy_message@
+
+  // Aether Talisman: summon Voidweaver. The Voidweaver applies Unstable debuff
+  :?summon.count = 0 & strong_summon = "aether" & item.CanActivate() & item.GetCooldown("aether_talisman") <= 0
     main_hand_busy_time = time + 20
-    main_hand_busy_message = "Aether Talisman: Summoning Voidweaver Devourer"
+    main_hand_busy_message = "Aether Talisman: Summoning Voidweaver"
     >`0,@screen.h-2@,@main_hand_busy_message@
     equipL aether talisman
     activate L
-  :?summon.count = 0 & item.CanActivate() & strong_summon = "fire" & item.GetCooldown("fire_talisman") <= 0
+  // Voidweaver devours an aether rune and your armor to unmake all nearby foes
+  :?summon.GetId() = "voidweaver" & item.CanActivate() & item.GetCooldown("voidweaver") = 0 & foe.debuffs.string = unstable & foe.count >= math.Clamp(most_foes, 5, 9) // & armor < 10
+    >`0,@screen.h-2@,Voidweaver: Devouring aether rune
+    equipL aether talisman
+    activate voidweaver
+
+  // Fire Talisman: summon Cinderwisp. The Cinderwisp applies Ignition debuff
+  :?summon.count = 0 & strong_summon = "fire" & item.CanActivate() & item.GetCooldown("fire_talisman") <= 0
     main_hand_busy_time = time + 20
-    main_hand_busy_message = "Fire Talisman: Summoning Cinderwisp Devourer"
+    main_hand_busy_message = "Fire Talisman: Summoning Cinderwisp"
     >`0,@screen.h-2@,@main_hand_busy_message@
     equipL fire talisman
     activate L
+  // Cinderwisp devours a Fire rune, dealing damage for each Ignition
+  :?summon.GetId() = "cinderwisp" & item.CanActivate() & item.GetCooldown("cinderwisp") = 0 & foe.distance < 30 & foe.debuffs.count > 9 & summon.GetVar("ignition", i) > 2
+    >`0,@screen.h-2@,Cinderwisp: Devouring fire rune
+    equipL fire talisman
+    activate cinderwisp
+
+  // Skeleton Arm: build pick_pocket buff
+  :?buffs.string ! "pick_pocket:5" & foe.distance <= 7 & foe ! immune_to_physical & foe ! bronze_guardian
+    >`0,@screen.h-2@,Skeleton Arm: Build pick_pocket buff
+    equip Skeleton Arm
+  // Skeleton Arm: steal whenever possible
+  :?item.GetCooldown("skeleton_arm") <= 0 & item.CanActivate() & buffs.string = "pick_pocket:5" & foe.hp < 32
+    >`0,@screen.h-2@,Skeleton Arm: Picking pocket
+    equip Skeleton Arm
+    activate R
 
   // harvest and pickup resources
-  :?harvest=Boulder & harvest.distance < 7 & res.stone < 20000
+  :?harvest=Boulder & harvest.distance < 7 & res.stone < 50000
     >`0,@screen.h-2@,Shovel: Dig stone
     equip shovel
-
-  :?harvest=Tree & harvest.distance < 7 & res.wood < 100000
+  :?harvest=Tree & harvest.distance < 7 & item.GetCooldown("hatchet") <= 0 & item.CanActivate() & res.wood < 50000
     >`0,@screen.h-2@,Hatchet: Chop wood
     equipR hatchet
-    ?item.GetCooldown("hatchet") <= 0 & item.CanActivate("hatchet")
-      activate R
-
+    activate R
   :?pickup.distance < 10
     >`0,@screen.h-2@,Star Stone: Attract objects
     equipL star
@@ -424,24 +458,24 @@ var main_hand_busy_message = ""
       >`0,@screen.h-2@,Triskelion Stone: Walk faster
       equipL triskelion
 
-  // use BFG against largest room of enemies
+  // Use BFG against largest room of enemies
   :?item.GetCooldown("blade") <= 0 & item.CanActivate() & foe.count >= math.Clamp(most_foes, 5, 10)
     main_hand_busy_time = time + 1
-    main_hand_busy_message = "BFG: Calling Pallas (foe count = @foe.count@ / math.Clamp(most_foes, 5, 10))"
+    main_hand_busy_message = "BFG: Calling Pallas (large crowd)"
     >`0,@screen.h-2@,@main_hand_busy_message@
     equip blade
     activate R
 
-  // use BFG against boss whenever ready
-  :?item.GetCooldown("blade") <= 0 & item.CanActivate() & foe = boss & foe.distance < 25 & loc ! halls & foe ! hrimnir
+  // Use BFG against boss whenever ready
+  :?item.GetCooldown("blade") <= 0 & item.CanActivate() & foe = boss & foe.distance < 25 & loc ! undead_crypt & foe ! hrimnir
     main_hand_busy_time = time + 1
     main_hand_busy_message = "BFG: Calling Pallas"
     >`0,@screen.h-2@,@main_hand_busy_message@
     equip blade
     activate R
 
-  // use nagaraja
-  :?item.GetCooldown("mask") <= 0 & item.CanActivate() & loc ! nagaraja & loc.stars > 10 & foe.distance < 25 & foe ! poena & foe ! scarab // & foe.hp <= 6
+  // Call Nagaraja
+  :?item.GetCooldown("mask") <= 0 & item.CanActivate() & loc ! nagaraja & loc.stars > 10 & foe.distance < 25 & foe ! poena & foe ! scarab & (foe = boss | foe.hp <= 6)
     main_hand_busy_time = time + 1
     main_hand_busy_message = "Cultist Mask: Calling Nagaraja"
     >`0,@screen.h-2@,@main_hand_busy_message@
@@ -452,9 +486,16 @@ var main_hand_busy_message = ""
   :?item.GetCooldown("hammer") <= 0 & item.CanActivate() & foe.armor > 20 & foe.distance <= 8
     main_hand_busy_message = "Heavy Hammer: Applying armor fatigue"
     // TODO: not sure if this actually takes time
-    main_hand_busy_time = time + 5
+    main_hand_busy_time = time + 30
     >`0,@screen.h-2@,@main_hand_busy_message@
     equip heavy hammer
+    activate R
+
+  :?item.GetCooldown("bardiche") <= 0 & item.CanActivate() & foe.distance <= 9 & foe ! immune_to_physical & foe.hp > 300
+    main_hand_busy_message = "Bardiche: Powerful single-target attack"
+    main_hand_busy_time = time + 30
+    >`0,@screen.h-2@,@main_hand_busy_message@
+    equip bardiche
     activate R
 
   :?foe ! immune_to_physical & foe.distance > 10 & ai.walking & DashForward()
@@ -487,7 +528,7 @@ var main_hand_busy_message = ""
 // >`0,11,hammer cd = @item.GetCooldown("hammer")@
 // >`0,12,foe = @foe@
 
-?loc = rocky
+?loc = rocky_plateau
   ?foe = boss // dysangelos
     ?foe.armor > 50
       equipL poison hammer
@@ -497,11 +538,23 @@ var main_hand_busy_message = ""
       :?foe.distance > 12
         equip repeating crossbow
 
+?loc = fungus_forest
+  ?foe = "Big A** Snail" & foe.distance > 10
+    equip repeating crossbow
+  ?foe = "Mr. Puff"
+    ?foe.distance < 10
+      DodgeBackward()
+    :
+      equip repeating crossbow
 
 ?loc = bronze_mine
+  ?loc.begin & item.potion ! lucky
+    brew stone + bronze // lucky
   ?foe = bomb & foe.distance <= 23
     equip repeating crossbow
   ?foe = bronze_guardian
+    ?loc.stars >= 12 & item.potion = lucky & time > 2500 & foe.hp > 2500
+      activate potion
     // equipL aether hammer
     // equipR vigor shield
     ?foe.state = 32 & foe.time > 25
@@ -516,44 +569,63 @@ var main_hand_busy_message = ""
     //   equip heavy hammer
     //   activate R
     :?foe.state ! 33
-      >`0,@screen.h-2@,Fighting Bronze Guardian at range
+      // >`0,@screen.h-2@,Fighting Bronze Guardian at range
       equip aether crossbow
 
 
-var ceiling_decorator_timer = 0
-// >`0,17,ceiling_decorator_timer = @ceiling_decorator_timer@
-?loc = caves
+var ceiling_decorator_landing_time = -1
+?loc = caustic_caves
   ?loc.begin & item.potion ! defensive
     brew stone + tar // defensive
+
   ?foe = ceiling decorator
+    ?foe.state = 33 & foe.time = 0
+      ceiling_decorator_landing_time = time + 21
     ?foe.distance > 10
       equip repeating crossbow
       //equip ice crossbow
-    ceiling_decorator_timer++
-    ?foe.state = 33 & foe.time = 0
-      ceiling_decorator_timer = 0
-    ?ceiling_decorator_timer = 25
-      DodgeEitherWay()
-    // ?foe.state = 33 & foe.time > 20 & item.GetCooldown("mind") <= 0
-    //   equipL mind
-  ?foe = bolesh & foe.state > 1
-    ?foe.distance > 10
-      ?need_armor = true & item.GetCooldown("quarterstaff") <= 0 & item.CanActivate()
-        equip quarterstaff
-        activate R
-      :
-        //equip repeating crossbow
-        equip ice crossbow
-    :?foe.state = 142 | foe.state = 143
-      ?item.GetCooldown("mind") <= 0
-        equipL mind
-      :
-        equip grap
+  ?time = ceiling_decorator_landing_time
+    DodgeEitherWay()
+
+  ?foe = bolesh // & foe.state > 1
+    // melee
+    ?foe.state = 142 & foe.debuffs.string ! debuff_chill & item.GetCooldown("mind") < (foe.time - 10)
+      // ?foe.time = 10
+        // loc.Pause()
+      ?foe.time >= 10 & DodgeBackward()
+        >`0,@screen.h-2@,Dodging melee attack
+    :?foe.state = 142 & foe.debuffs.string = debuff_chill & item.GetCooldown("mind") < (foe.time - 30)
+      // ?foe.time = 30
+        // loc.Pause()
+      ?foe.time >= 30 & DodgeBackward()
+        >`0,@screen.h-2@,Dodging melee attack
+    :?foe.state = 142
+      >`0,@screen.h-2@,Knocking back-----------3
+      equip grappling hook
+      main_hand_busy_time = time + 30
+
+    // ranged
+    :?foe.state = 133 & foe.debuffs.string ! debuff_chill & item.GetCooldown("mind") < 180
+      ?foe.time > 20 & DodgeForward()
+        >`0,@screen.h-2@,Dodging ranged attack
+    :?foe.state = 133 & foe.debuffs.string = debuff_chill & item.GetCooldown("mind") < 180
+      ?foe.time > 60 & DodgeForward()
+        >`0,@screen.h-2@,Dodging ranged attack
+    :?foe.distance > 10
+      // equip ice crossbow
+      equip repeating crossbow
+
+  // // challenge: defeat bolesh with blade
+  // ?foe = bolesh & foe.hp < 300
+  //   ?foe.distance > 10
+  //     equipR dashing
+  //   :
+  //     equip blade
 
 
-?loc = canyon
-  ?loc.begin & item.potion ! invis
-    brew stone + wood // invis
+?loc = deadwood_valley
+  ?loc.begin & item.potion ! invisibility
+    brew stone + wood // invisibility
   ?foe = wasp & foe.distance <= 22
     equip repeating crossbow
     // equip fire crossbow
@@ -591,7 +663,7 @@ var ceiling_decorator_timer = 0
       DodgeForward()
 
 
-?loc = halls
+?loc = undead_crypt
   // R.I.Pieces
   ?screen.i = 7 & foe.count >= 1
     equipL vigor wand D +13
@@ -599,7 +671,7 @@ var ceiling_decorator_timer = 0
     equipR vigor big sword
   ?foe = pallas
     ?foe = phase1 & foe.state = 32
-      // unmake pallas arm
+      // challenge: unmake pallas arm
       equipL aether U
     :?foe.count > 2
       equip bardiche
@@ -620,46 +692,6 @@ var ceiling_decorator_timer = 0
       equip bardiche
 
 
-// special weapons with cooldowns and costs
-
-// activate summon abilities
-for i = 0 .. summon.count 
-  ?summon.GetId(i) = "cinderwisp"
-    ?item.canActivate()
-      ?item.GetCooldown("cinderwisp") = 0 & foe.distance < 30 & foe.debuffs.count > 9 & summon.GetVar("ignition", i) > 2
-        >`0,@screen.h-3@,Activating cinderwisp
-        equipL fire_talisman
-          activate cinderwisp
-  // ?summon.GetId(i) = "voidweaver"
-  //   ?item.canActivate()
-  //     ?item.GetCooldown("voidweaver") = 0 & foe.distance < 30 & foe.debuffs.count > 9 & summon.GetVar("ignition", i) > 2
-  //       equipL fire_talisman
-  //         activate voidweaver
-
-
-// maintain pick_pocket buff and steal as much as possible
-?foe.distance <= 7 & foe ! immune_to_physical
-  ?buffs.string ! "pick_pocket:5"
-    equip Skeleton Arm
-  :?item.GetCooldown("skeleton_arm") <= 0 & foe.hp < 32
-    equip Skeleton Arm
-    ?item.CanActivate("skeleton_arm")
-      activate R
-
-// use bardiche activation
-?foe = boss & foe.distance <= 9
-  ?item.GetCooldown("bardiche") <= 0 | item.GetCooldown("bardiche") > 870
-    equip bardiche
-    ?item.CanActivate("bardiche")
-      activate R
-
-// challenges
-
-?foe = bolesh & foe.hp < 300
-  ?foe.distance > 10
-    equipR dashing
-  :
-    equip blade
 
 //?foe ! immune_to_stun & foe ! immune_to_physical
 //  equipL aether hammer
@@ -671,7 +703,7 @@ for i = 0 .. summon.count
 //   equipL aether hammer
 
 // Legend: the cauldron collective
-//?loc = halls
+//?loc = undead_crypt
 //  ?loc.begin & item.potion ! vampiric
 //    brew bronze + tar // vampiric
 //  ?foe = pallas & foe = phase2 & foe.hp < 310

@@ -274,7 +274,17 @@ func AttackWithDebuffs()
 
   // >`0,@screen.h-3@,Buffs = @buffs.string@
 
+var curr_state = 0
+var curr_time = 0
+var prev_state = 0
+var prev_time = 0
+
 ?ai.enabled & foe.count > 0
+  ?foe.state ! curr_state
+    prev_state = curr_state
+    prev_time = curr_time
+    curr_state = foe.state
+  curr_time = foe.time
   //?foe.count > 1
   //  >`@screen.w-20@,@screen.h-5@,Count = @foe.count@
   ?foe = boss
@@ -285,8 +295,8 @@ func AttackWithDebuffs()
     >`@screen.w-20@,@screen.h-5@,Phase = 2
   :?foe = phase3
     >`@screen.w-20@,@screen.h-5@,Phase = 3
-  >`@screen.w-20@,@screen.h-4@,State = @foe.state@
-  >`@screen.w-20@,@screen.h-3@,Time  = @foe.time@
+  >`@screen.w-20@,@screen.h-4@,Prev  = @prev_state@:@prev_time@
+  >`@screen.w-20@,@screen.h-3@,State = @foe.state@:@foe.time@
   >`@screen.w-20@,@screen.h-6@,Foes  = @foe.count@ / @most_foes@
   ?encounter.isElite
     >`@screen.w-20@,@screen.h-7@,@encounter.eliteMod@

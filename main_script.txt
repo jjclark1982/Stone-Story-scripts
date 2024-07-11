@@ -229,7 +229,7 @@ func AttackWithDebuffs()
     return false
 
   // cultist mask activation applies poison
-  ?item.GetCooldown("mask") <= 0 & item.CanActivate() & loc ! nagaraja
+  ?item.GetCooldown("mask") <= 0 & item.CanActivate() & loc ! nagaraja & foe.distance < 25
     equipR mask
     item.CanActivate("mask")
       activate R
@@ -327,17 +327,16 @@ var strong_summon
   strong_summon = "fire"
 :
   strong_summon = "aether"
-// Research and Development: apply unstable to 32 foes
+// Research: apply unstable to 32 foes
 strong_summon = "aether"
 
 var strong_element
 strong_element = GetStrongElement()
 
-
 var need_armor = false
-?armor < 3
+?armor < 5
   need_armor = true
-?armor >= 6
+?armor >= 15
   need_armor = false
 // ?need_armor = true
 //  >`0,@screen.h-4@,need armor
@@ -362,7 +361,7 @@ var need_hp = false
 ?ai.enabled
   // :?armor < 8
   //   equipR compound shield
-  ?foe = Big Booo & foe.distance < 10
+  ?foe = Big Booo & foe.GetCount(10) > 1
   // :?loc = undead_crypt & screen.i = 7 & foe.count >= 1
     // R.I.Pieces mini-boss
     >`0,@screen.h-3@,Fighting off Big Booo
@@ -376,7 +375,7 @@ var need_hp = false
     // gain armor when engaging
     >`0,@screen.h-3@,@strong_element@ Shield: Engage to gain armor
     equipR @strong_element@ shield *10
-  :?need_armor = true | (foe.distance > 20 & ai.walking & armor < 14)
+  :?need_armor = true | (foe.distance > 20 & ai.walking & armor < 14) | (foe = boss & foe.state <= 1)
     // regen armor
     >`0,@screen.h-3@,Compound Shield: Build armor
     equipR compound shield *10
@@ -441,7 +440,7 @@ var main_hand_busy_message = ""
     >`0,@screen.h-2@,Skeleton Arm: Build pick_pocket buff
     equip Skeleton Arm
   // Skeleton Arm: steal whenever possible
-  :?item.GetCooldown("skeleton_arm") <= 0 & item.CanActivate() & buffs.string = "pick_pocket:5" & foe.hp < 32
+  :?item.GetCooldown("skeleton_arm") <= 0 & item.CanActivate() & buffs.string = "pick_pocket:5" & foe.distance <= 7 & foe.hp < 32
     >`0,@screen.h-2@,Skeleton Arm: Picking pocket
     equip Skeleton Arm
     activate R
@@ -520,7 +519,7 @@ var main_hand_busy_message = ""
   :?foe.getCount(foe.distance + 3) >= 3 & AttackWithSplash()
     >`0,@screen.h-2@,Attacking with splash
 
-  :?foe = boss & need_hp = true
+  :?need_hp = true // & foe = boss
     >`0,@screen.h-2@,Attacking with life leech
     equipL vigor sword dL -big
 
@@ -549,13 +548,15 @@ var main_hand_busy_message = ""
         equip repeating crossbow
 
 ?loc = fungus_forest
-  ?foe = "Big A** Snail" & foe.distance > 10
+  ?foe = "Big A** Snail" & foe.distance > 10 & foe.distance < 26
     equip repeating crossbow
   ?foe = "Mr. Puff"
     ?foe.distance < 10
       DodgeBackward()
     :
       equip repeating crossbow
+  ?loc = fungus_forest_boss & foe.distance > 30
+    equipR compound shield
 
 ?loc = bronze_mine
   ?loc.begin & item.potion ! lucky
@@ -639,16 +640,23 @@ var ceiling_decorator_landing_time = -1
   ?foe = wasp & foe.distance <= 22
     equip repeating crossbow
     // equip fire crossbow
+  ?foe = xyloalgia & foe.state > 1
+    // ?foe.state = 33 & foe.time = 10 & foe.distance >= 10
+    //   DodgeForward()
+    // :?foe.state = 33 & foe.time = 10 & foe.distance < 10
+    //   DodgeBackward()
+    ?foe.distance >= 10 
+      equip repeating crossbow
   ?foe = poena
     // ?foe.distance > 16
     //   equip bardiche
-    ?foe.distance > 11 & buffs ! invisibility
+    ?foe.distance > 11 // & buffs.string ! invisibility
       equip repeating crossbow
-    :
-      equip bardiche
+    // :
+    //   equip bardiche
     ?foe.state = 32 & foe.time = 41
       DodgeEitherWay()
-      // ?item.GetCooldown("mind") <= 0 & buffs ! invisibility
+      // ?item.GetCooldown("mind") <= 0 & buffs.string ! invisibility
       //   equipL mind
       // :?item.potion = invisibility
       //   activate potion

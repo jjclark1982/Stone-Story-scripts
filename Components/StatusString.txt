@@ -1,0 +1,53 @@
+// StatusString
+// version 1.0
+//
+// Usage:
+//
+//   var foe_debuffs = new Components/StatusString
+//   foe_debuffs.Init(foe.debuffs.string)
+//   ?foe_debufs.GetCount("debuff_chill") < 6 & foe ! immune_to_debuff_chill
+//     equipL ice dI
+//
+//   var my_buffs = new Components/StatusString
+//   my_buffs.Init(buffs.string)
+//   ?my_buffs.GetCount("smite") >= 10
+//     equipL fire dF
+
+var ids = []
+var names = []
+var counts = []
+var time_left = []
+
+func GetCount(name)
+  var i = names.IndexOf(name)
+  ?i < 0
+    return 0
+  :
+    return counts[i]
+
+func GetTimeLeft(name)
+  var i = names.IndexOf(name)
+  ?i < 0
+    return 0
+  :
+    return time_left[i]
+
+func Init(status_string)
+  ids.Clear()
+  names.Clear()
+  counts.Clear()
+  time_left.Clear()
+  // var i = 0
+  ?status_string
+    var status_array = string.Split(status_string, ",", true)
+    var fields
+    ?status_array.Count()
+      // >`0,14,Foe Debuffs
+      for status : status_array
+        // >`0,@15+i@,@status@
+        // i++
+        fields = string.Split(status, ":")
+        ids.Add(fields[0])
+        names.Add(fields[1])
+        counts.Add(int.Parse(fields[2]))
+        time_left.Add(int.Parse(fields[3]))

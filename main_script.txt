@@ -15,7 +15,11 @@
 // var freeChest = import UI/freeChestTracker
 // freeChest.Main()
 
+// import UI/BetterInfo2
+
 import AnimationCancel
+
+// >`0,8,parse test: @int.Parse("123")
 
 var most_foes_key
 most_foes_key = string.Format("most_foes_{0}_{1}", loc.id, loc.stars)
@@ -189,11 +193,11 @@ func AttackWithSplash()
   var element = GetStrongElement()
 
   ?foe = immune_to_physical
-    equipL @element@ wand
+    equipL @element@ wand *10
 
   // use elemental splash when smite buff is active
   :?buffs.string = smite & foe.distance <= 6
-    equipL @element@ big sword
+    equipL @element@ big sword *10
     return true
 
   :?foe.distance <= 7 & foe ! immune_to_stun
@@ -205,7 +209,7 @@ func AttackWithSplash()
     return true
 
   :?foe.distance <= 6
-    equipL @element@ big sword
+    equipL @element@ big sword *10
     return true
 
   // // grappling hook (range 13, damage 8) pushes foes away with splash and stun
@@ -221,34 +225,37 @@ func AttackWithSplash()
 func AttackWithDebuffs()
   ?foe ! boss
     return false
-  ?foe = immune_to_debuff_damage
-    return false
-  ?foe = morel
-    return false
+  // ?foe = immune_to_debuff_damage
+  //   return false
+  // ?foe = morel
+  //   return false
   ?foe = poena
     return false
 
-  // cultist mask activation applies poison
-  ?item.GetCooldown("mask") <= 0 & item.CanActivate() & loc ! nagaraja & foe.distance < 25
+  var foe_debuffs = new Components/StatusString
+  foe_debuffs.Init(foe.debuffs.string)
+
+  // feeble debuff reduces damage done
+  ?item.GetCooldown("mask") <= 0 & item.CanActivate() & loc ! nagaraja & foe.distance < 25 & foe ! morel
     equipR mask
     item.CanActivate("mask")
       activate R
       return true
   
-  // fire debuff applies damage over time
-  ?foe.debuffs.string ! debuff_dot & foe ! immune_to_debuff_damage
-    equipL fire dF
-    return true
-
   // poison debuff increases damage taken
-  :?foe.debuffs.string ! debuff_damage & foe ! immune_to_debuff_damage
-    equipL poison sword dP
+  :?foe_debuffs.GetCount("debuff_damage") < 1 & foe ! immune_to_debuff_damage
+    equipL poison sword dP *10
     return true
 
-  // ice debuff slows enemy
+  // fire debuff applies damage over time
+  ?foe_debuffs.GetCount("debuff_dot") < 1 & foe ! immune_to_debuff_dot
+    equipL fire dF *10
+    return true
+
+  // ice debuff slows attack speed
   // :?foe.debuffs.string ! "debuff_chill:6"
-  :?foe.debuffs.count < 5 & foe ! immune_to_debuff_chill
-    equipL ice sword dI
+  :?foe_debuffs.GetCount("debuff_chill") < 6 & foe ! immune_to_debuff_chill & foe ! morel
+    equipL ice sword dI -big *10
     return true
 
   :?AttackWithStun()
@@ -259,8 +266,8 @@ func AttackWithDebuffs()
 
 // start of main script
 
-?ai.enabled
-  >`@screen.w-21@,0,Screen = @screen.i@:@screen.x@ + @pos.x@
+// ?ai.enabled
+//   >`@screen.w-21@,10,Screen = @screen.i@:@screen.x@ + @pos.x@
   //>`0,6,Cooldowns
   //>`0,7,Mask = @item.GetCooldown("mask")@
   // >`0,7,Bashing = @item.GetCooldown("bash")@
@@ -303,14 +310,9 @@ var prev_time = 0
   //>`@screen.w-20@,@screen.h-5@,Foes = @foe.count@
   ?foe.distance < 9999
     >`@screen.w-23@,@screen.h-2@,Distance = @foe.distance@
-  //var a
-  //?foe.debuffs.count > 0
-  //  a = string.Split(foe.debuffs.string, ',')
-  //  //for debuff : debuffs
-  //  for i = 0 .. a.Count()-1
-  //    >`@screen.w-30@,@screen.h-6-i@,@a[i]@
-  //>`0,10,debuffs: @foe.debuffs.string@
 
+var my_buffs = new Components/StatusString
+my_buffs.Init(buffs.string)
 
 // var foe_desc
 // foe_desc = string.Split(foe)
@@ -365,7 +367,7 @@ var need_hp = false
   // :?loc = undead_crypt & screen.i = 7 & foe.count >= 1
     // R.I.Pieces mini-boss
     >`0,@screen.h-3@,Fighting off Big Booo
-    equipR vigor big sword
+    equipR vigor big sword *10
   :?need_hp = true & foe.distance < 10
     >`0,@screen.h-3@,Vigor Shield ah: Heal when attacked
     equipR vigor shield ah *10
@@ -418,7 +420,7 @@ var main_hand_busy_message = ""
     activate L
   // Voidweaver devours an aether rune and your armor to unmake all nearby foes
   :?summon.GetId() = "voidweaver" & item.CanActivate() & item.GetCooldown("voidweaver") = 0 & foe.debuffs.string = unstable & foe.count >= math.Clamp(most_foes, 5, 9) // & armor < 10
-    >`0,@screen.h-2@,Voidweaver: Devouring aether rune
+    >`0,@screen.h-2@,Voidweaver: Devouring aether to unmake foes
     equipL aether talisman
     activate voidweaver
 
@@ -431,7 +433,7 @@ var main_hand_busy_message = ""
     activate L
   // Cinderwisp devours a Fire rune, dealing damage for each Ignition
   :?summon.GetId() = "cinderwisp" & item.CanActivate() & item.GetCooldown("cinderwisp") = 0 & foe.distance < 30 & foe.debuffs.count > 9 & summon.GetVar("ignition", i) > 2
-    >`0,@screen.h-2@,Cinderwisp: Devouring fire rune
+    >`0,@screen.h-2@,Cinderwisp: Devouring fire to ignite foes
     equipL fire talisman
     activate cinderwisp
 
@@ -446,13 +448,14 @@ var main_hand_busy_message = ""
     activate R
 
   // harvest and pickup resources
-  :?harvest=Boulder & harvest.distance < 7 & res.stone < 50000
+  :?harvest = "boulder" & harvest.distance < 7 & res.stone < 50000
     >`0,@screen.h-2@,Shovel: Dig stone
     equip shovel
-  :?harvest=Tree & harvest.distance < 7 & item.GetCooldown("hatchet") <= 0 & item.CanActivate() & res.wood < 50000
-    >`0,@screen.h-2@,Hatchet: Chop wood
+  :?harvest = "tree" & harvest.distance < 7 & res.wood < 50000
+    >`0,@screen.h-3@,Hatchet: Chop wood
     equipR hatchet
-    activate R
+    ?item.GetCooldown("hatchet") <= 0 & item.CanActivate("hatchet")
+      activate R
   :?pickup.distance < 10
     >`0,@screen.h-2@,Star Stone: Attract objects
     equipL star
@@ -468,7 +471,7 @@ var main_hand_busy_message = ""
       equipL triskelion
 
   // Use BFG against largest room of enemies
-  :?item.GetCooldown("blade") <= 0 & item.CanActivate() & foe.count >= math.Clamp(most_foes, 5, 10)
+  :?item.GetCooldown("blade") <= 0 & item.CanActivate() & foe.count >= math.Clamp(most_foes, 5, 12)
     main_hand_busy_time = time + 1
     main_hand_busy_message = "BFG: Calling Pallas (large crowd)"
     >`0,@screen.h-2@,@main_hand_busy_message@
@@ -484,7 +487,7 @@ var main_hand_busy_message = ""
     activate R
 
   // Call Nagaraja
-  :?item.GetCooldown("mask") <= 0 & item.CanActivate() & loc ! nagaraja & loc.stars > 10 & foe.distance < 25 & foe ! poena & foe ! scarab & (foe = boss | foe.hp <= 6)
+  :?item.GetCooldown("mask") <= 0 & item.CanActivate() & loc ! nagaraja & foe.distance < 25 & foe ! poena & foe ! scarab & (foe = boss | foe.hp <= (8 + 4.7*my_buffs.GetCount("smite")))
     main_hand_busy_time = time + 1
     main_hand_busy_message = "Cultist Mask: Calling Nagaraja"
     >`0,@screen.h-2@,@main_hand_busy_message@

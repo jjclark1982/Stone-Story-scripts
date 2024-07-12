@@ -19,6 +19,8 @@
 
 import AnimationCancel
 
+// >`0,10,Foe Count = @foe.getCount(foe.distance)@, @foe.getCount(foe.distance + 5)@
+
 // >`0,8,parse test: @int.Parse("123")
 
 var most_foes_key
@@ -53,11 +55,13 @@ func GetStrongWeapon()
     weapon = "wand"
   :?foe.armor > 10
     weapon = "hammer"
-  :?foe.distance > 10 & foe ! ranged & foe ! immune_to_ranged & foe.count < 3
+  :?foe.GetCount(foe.distance + 3) > 2
+    weapon = "big sword"
+  :?foe ! immune_to_ranged & foe.count < 3 // & foe ! ranged & foe.distance > 10
     weapon = "repeating crossbow"
     element = ""
   :?foe = immune_to_ranged
-    weapon = "big sword"
+    weapon = "-big sword"
 
   var criteria = string.Format("{0} {1} *10", element, weapon)
   var count = item.GetCount(criteria)
@@ -159,6 +163,8 @@ func AttackWithStun()
     return false
   ?foe = poena
     return false
+  ?foe = morel
+    return false
   ?foe.hp < 40
     return false
     
@@ -209,7 +215,7 @@ func AttackWithSplash()
     return true
 
   :?foe.distance <= 6
-    equipL @element@ big sword *10
+    equipL @element@ big sword D *10
     return true
 
   // // grappling hook (range 13, damage 8) pushes foes away with splash and stun
@@ -244,18 +250,18 @@ func AttackWithDebuffs()
   
   // poison debuff increases damage taken
   :?foe_debuffs.GetCount("debuff_damage") < 1 & foe ! immune_to_debuff_damage
-    equipL poison sword dP *10
+    equipL poison -big sword dP *10
     return true
 
   // fire debuff applies damage over time
   ?foe_debuffs.GetCount("debuff_dot") < 1 & foe ! immune_to_debuff_dot
-    equipL fire dF *10
+    equipL fire -big sword dF *10
     return true
 
   // ice debuff slows attack speed
   // :?foe.debuffs.string ! "debuff_chill:6"
-  :?foe_debuffs.GetCount("debuff_chill") < 6 & foe ! immune_to_debuff_chill & foe ! morel
-    equipL ice sword dI -big *10
+  :?foe_debuffs.GetCount("debuff_chill") < 4 & foe ! immune_to_debuff_chill & foe ! morel
+    equipL ice -big sword dI *10
     return true
 
   :?AttackWithStun()
@@ -438,11 +444,11 @@ var main_hand_busy_message = ""
     activate cinderwisp
 
   // Skeleton Arm: build pick_pocket buff
-  :?buffs.string ! "pick_pocket:5" & foe.distance <= 7 & foe ! immune_to_physical & foe ! bronze_guardian
+  :?buffs.string ! "pick_pocket:5" & foe.distance <= 7 & foe ! immune_to_physical & foe ! bronze_guardian & foe ! enoki
     >`0,@screen.h-2@,Skeleton Arm: Build pick_pocket buff
     equip Skeleton Arm
   // Skeleton Arm: steal whenever possible
-  :?item.GetCooldown("skeleton_arm") <= 0 & item.CanActivate() & buffs.string = "pick_pocket:5" & foe.distance <= 7 & foe.hp < 32
+  :?item.GetCooldown("skeleton_arm") <= 0 & item.CanActivate() & buffs.string = "pick_pocket:5" & foe ! immune_to_physical & foe.distance <= 7 & foe.hp < 32
     >`0,@screen.h-2@,Skeleton Arm: Picking pocket
     equip Skeleton Arm
     activate R
@@ -471,12 +477,14 @@ var main_hand_busy_message = ""
       equipL triskelion
 
   // Use BFG against largest room of enemies
-  :?item.GetCooldown("blade") <= 0 & item.CanActivate() & foe.count >= math.Clamp(most_foes, 5, 12)
+  :?item.GetCooldown("blade") <= 0 & item.CanActivate() & foe.count >= math.Clamp(most_foes, 5, 10)
     main_hand_busy_time = time + 1
     main_hand_busy_message = "BFG: Calling Pallas (large crowd)"
     >`0,@screen.h-2@,@main_hand_busy_message@
     equip blade
+    // screen.Next()
     activate R
+    // screen.ResetOffset()
 
   // Use BFG against boss whenever ready
   :?item.GetCooldown("blade") <= 0 & item.CanActivate() & foe = boss & foe.distance < 25 & loc ! undead_crypt & foe ! hrimnir
@@ -487,7 +495,7 @@ var main_hand_busy_message = ""
     activate R
 
   // Call Nagaraja
-  :?item.GetCooldown("mask") <= 0 & item.CanActivate() & loc ! nagaraja & foe.distance < 25 & foe ! poena & foe ! scarab & (foe = boss | foe.hp <= (8 + 4.7*my_buffs.GetCount("smite")))
+  :?item.GetCooldown("mask") <= 0 & item.CanActivate() & loc ! nagaraja & foe.distance < 25 & foe ! poena & foe ! scarab & (foe = boss | (buffs.string = smite & foe.hp <= (8 + 4.7*my_buffs.GetCount("smite"))))
     main_hand_busy_time = time + 1
     main_hand_busy_message = "Cultist Mask: Calling Nagaraja"
     >`0,@screen.h-2@,@main_hand_busy_message@
@@ -527,8 +535,13 @@ var main_hand_busy_message = ""
     equipL vigor sword dL -big
 
   :?foe.count > 0
-    >`0,@screen.h-2@,Attacking with strong weapon: @GetStrongWeapon()@
-    equipL @GetStrongWeapon()@
+    var strong_weapon
+    strong_weapon = GetStrongWeapon()
+    >`0,@screen.h-2@,Attacking with strong weapon: @strong_weapon@
+    ?strong_weapon = "repeating"
+      equip @strong_weapon@
+    :
+      equipL @strong_weapon@
 
 
 
@@ -541,18 +554,21 @@ var main_hand_busy_message = ""
 // >`0,12,foe = @foe@
 
 ?loc = rocky_plateau
-  ?foe = boss // dysangelos
-    ?foe.armor > 50
-      equipL poison hammer
-    ?foe.state = 115 & foe.time > 65
+  ?foe = dysangelos
+    ?foe = phase2 & foe = ice & foe.state = 32 & foe.time > 50
+      ?foe.distance < 10
+        DodgeBackward()
+      :
+        equip repeating crossbow
+    :?foe.state = 115 & foe.time > 65
       ?item.GetCooldown("mind") <= 0
         equipL mind
       :?foe.distance > 12
         equip repeating crossbow
 
 ?loc = fungus_forest
-  ?foe = "Big A** Snail" & foe.distance > 10 & foe.distance < 26
-    equip repeating crossbow
+  // ?foe = "Big A** Snail" & foe.distance > 10 & foe.distance < 26
+  //   equip repeating crossbow
   ?foe = "Mr. Puff"
     ?foe.distance < 10
       DodgeBackward()
@@ -560,6 +576,17 @@ var main_hand_busy_message = ""
       equip repeating crossbow
   ?loc = fungus_forest_boss & foe.distance > 30
     equipR compound shield
+  ?foe = angry shroom & foe.state > 1
+    // equip repeating cossbow
+    ?foe.state = 32 & foe.time > 25
+      DodgeBackward()
+    ?item.GetCooldown("mind") > 30 & foe.distance > 10
+      equip repeating crossbow
+  ?foe = morel & foe.state >  1
+    ?foe.state = 32 & foe.time > 47
+      DodgeBackward()
+    ?item.GetCooldown("mind") > 30 & foe.distance > 10
+      equip repeating crossbow
 
 ?loc = bronze_mine
   ?loc.begin & item.potion ! lucky

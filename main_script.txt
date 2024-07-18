@@ -57,7 +57,7 @@ func GetStrongWeapon()
     weapon = "hammer"
   :?foe.GetCount(foe.distance + 3) > 2
     weapon = "big sword"
-  :?foe ! immune_to_ranged & foe.count < 3 // & foe ! ranged & foe.distance > 10
+  :?foe ! immune_to_ranged & foe.count < 3 & foe ! ranged & foe.distance > 10
     weapon = "repeating crossbow"
     element = ""
   :?foe = immune_to_ranged
@@ -287,6 +287,9 @@ func AttackWithDebuffs()
 
   // >`0,@screen.h-3@,Buffs = @buffs.string@
 
+// >`0,@screen.h-4@,Item.left = @item.left@
+// >`0,@screen.h-5@,Item.right = @item.right@
+
 var curr_state = 0
 var curr_time = 0
 var prev_state = 0
@@ -362,14 +365,26 @@ var need_hp = false
 //?hp < 15
 ?hp < maxhp / 3 & foe.count > 0
   ?item.potion = defensive | item.potion = heal
+    // TODO: equip +life items
     activate potion
+
+
+// >`0,11,summon count = @summon.count@
+// >`0,11,busy time = @time@ / @main_hand_busy_time@
+// >`0,12,@strong_summon@_talisman cd = @item.GetCooldown("aether_talisman")@
+var main_hand_busy_time = 0
+?loc.begin | loc.loop | time <= 1
+  main_hand_busy_time = 0
+var main_hand_busy_message = ""
 
 
 // select off-hand item
 ?ai.enabled
+  ?time < main_hand_busy_time & !item.left
+    >`0,@screen.h-3@,@main_hand_busy_message@
   // :?armor < 8
   //   equipR compound shield
-  ?foe = Big Booo & foe.GetCount(10) > 1
+  :?foe = Big Booo & foe.GetCount(foe.distance + 3) > 1
   // :?loc = undead_crypt & screen.i = 7 & foe.count >= 1
     // R.I.Pieces mini-boss
     >`0,@screen.h-3@,Fighting off Big Booo
@@ -379,10 +394,14 @@ var need_hp = false
     equipR vigor shield ah *10
   // :?foe = aether & foe.distance < 10 & foe ! boss
   //   equipR vigor shield
-  :?foe.GetCount(25) > foe.GetCount(6) & strong_element
+  :?foe.GetCount(20) > foe.GetCount(6) & strong_element
     // gain armor when engaging
     >`0,@screen.h-3@,@strong_element@ Shield: Engage to gain armor
     equipR @strong_element@ shield *10
+  :?need_armor = true & armor > 0 & foe.distance <= 6
+    // conserve armor
+    >`0,@screen.h-3@,Towering Shield: Conserve armor
+    equipR towering shield *10
   :?need_armor = true | (foe.distance > 20 & ai.walking & armor < 14) | (foe = boss & foe.state <= 1)
     // regen armor
     >`0,@screen.h-3@,Compound Shield: Build armor
@@ -400,14 +419,6 @@ var need_hp = false
 
 
 // select main hand item
-
-// >`0,11,summon count = @summon.count@
-// >`0,11,busy time = @time@ / @main_hand_busy_time@
-// >`0,12,@strong_summon@_talisman cd = @item.GetCooldown("aether_talisman")@
-var main_hand_busy_time = 0
-?loc.begin | loc.loop | time < 10
-  main_hand_busy_time = 0
-var main_hand_busy_message = ""
 
 ?ai.enabled
   ?time < main_hand_busy_time
@@ -466,12 +477,12 @@ var main_hand_busy_message = ""
     >`0,@screen.h-2@,Star Stone: Attract objects
     equipL star
 
-  :?foe.distance > 20 & ai.walking
-    ?need_hp = true
+  :?foe.distance > 20 & ai.walking & (need_hp = true | need_armor = true)
       // regen hp
       >`0,@screen.h-2@,Oroboros Stone: Regain health
       equipL ouroboros
-    :?need_armor = false
+
+  :?foe.distance > 20 & ai.walking
       // walk faster
       >`0,@screen.h-2@,Triskelion Stone: Walk faster
       equipL triskelion
@@ -591,8 +602,13 @@ var main_hand_busy_message = ""
 ?loc = bronze_mine
   ?loc.begin & item.potion ! lucky
     brew stone + bronze // lucky
-  ?foe = bomb & foe.distance <= 23
-    equip repeating crossbow
+  ?foe = bomb
+    ?foe.distance > 10 & foe.distance <= 23
+      equip repeating crossbow
+    :?foe.distance <= 6
+      DodgeBackward()
+    :?foe.hp < foe.maxhp & foe.distance > 10
+      equip repeating crossbow
   ?foe = bronze_guardian
     ?loc.stars >= 12 & item.potion = lucky & time > 2500 & foe.hp > 2500
       activate potion
@@ -628,22 +644,22 @@ var ceiling_decorator_landing_time = -1
   ?time = ceiling_decorator_landing_time
     DodgeEitherWay()
 
-  ?foe = bolesh // & foe.state > 1
+  ?foe = bolesh & foe.state > 1
     // melee
-    ?foe.state = 142 & foe.debuffs.string ! debuff_chill & item.GetCooldown("mind") < (foe.time - 10)
+    ?foe.state = 142 & foe.debuffs.string ! debuff_chill & item.GetCooldown("mind") < Math.Clamp(foe.time - 10, 0, 1000)
       // ?foe.time = 10
         // loc.Pause()
       ?foe.time >= 10 & DodgeBackward()
         >`0,@screen.h-2@,Dodging melee attack
-    :?foe.state = 142 & foe.debuffs.string = debuff_chill & item.GetCooldown("mind") < (foe.time - 30)
+    :?foe.state = 142 & foe.debuffs.string = debuff_chill & item.GetCooldown("mind") < Math.Clamp(foe.time - 30, 0, 1000)
       // ?foe.time = 30
         // loc.Pause()
       ?foe.time >= 30 & DodgeBackward()
         >`0,@screen.h-2@,Dodging melee attack
-    :?foe.state = 142
-      >`0,@screen.h-2@,Knocking back-----------3
-      equip grappling hook
-      main_hand_busy_time = time + 30
+    // :?foe.state = 142
+    //   >`0,@screen.h-2@,Knocking back-----------3
+    //   equip grappling hook
+    //   main_hand_busy_time = time + 30
 
     // ranged
     :?foe.state = 133 & foe.debuffs.string ! debuff_chill & item.GetCooldown("mind") < 180
@@ -713,20 +729,23 @@ var ceiling_decorator_landing_time = -1
 
 ?loc = undead_crypt
   // R.I.Pieces
-  ?screen.i = 7 & foe.count >= 1
-    equipL vigor wand D +13
-    //equipR vigor wand dL +11
-    equipR vigor big sword
+  // ?screen.i = 7 & foe.count >= 1
+  //   equipL vigor wand D +13
+  //   //equipR vigor wand dL +11
+  //   equipR vigor big sword
   ?foe = pallas
     ?foe = phase1 & foe.state = 32
       // challenge: unmake pallas arm
       equipL aether U
     :?foe.count > 2
       equip bardiche
-    :?foe = phase2 & foe.state = 33 & foe.time = 1
-      DodgeBackward()
-    :?foe = phase2 & foe.state = 33 & foe.time = 25
-      DodgeForward()
+    :?foe = phase2 & foe.state = 33
+      ?foe.time = 1
+        DodgeBackward()
+      :?foe.time = 25
+        DodgeForward()
+      :?foe.distance > 10
+        equip repeating crossbow
     :?foe = phase2 & foe.hp < 350
       equip blade
 

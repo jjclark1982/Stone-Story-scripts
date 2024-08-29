@@ -384,16 +384,22 @@ var main_hand_busy_message = ""
     >`0,@screen.h-3@,@main_hand_busy_message@
   // :?armor < 8
   //   equipR compound shield
-  :?foe = Big Booo & foe.GetCount(foe.distance + 3) > 1
+  :?foe = immune_to_physical & foe.GetCount(foe.distance + 5) > 1
   // :?loc = undead_crypt & screen.i = 7 & foe.count >= 1
-    // R.I.Pieces mini-boss
-    >`0,@screen.h-3@,Fighting off Big Booo
-    equipR vigor big sword *10
+    // R.I.Pieces mini-boss - spawns Big Booo
+    ?foe.distance <= 6
+      >`0,@screen.h-3@,@strong_element@ big sword: Attacking with elemental splash
+      equipR @strong_element@ big sword *10
+    :
+      >`0,@screen.h-3@,@strong_element@ wand 
+      // equipR moondial stone
+      equipR @strong_element@ wand D *10
+    // ?foe.distance > 10
+    //   equipR vigor wand *10
+    // :
   :?need_hp = true & foe.distance < 10
     >`0,@screen.h-3@,Vigor Shield ah: Heal when attacked
     equipR vigor shield ah *10
-  // :?foe = aether & foe.distance < 10 & foe ! boss
-  //   equipR vigor shield
   :?foe.GetCount(20) > foe.GetCount(6) & strong_element
     // gain armor when engaging
     >`0,@screen.h-3@,@strong_element@ Shield: Engage to gain armor
@@ -415,7 +421,7 @@ var main_hand_busy_message = ""
   :?foe.distance < 10
     // moondial stone increases attack speed
     >`0,@screen.h-3@,Moondial Stone: Attack faster
-    equipR moon
+    equipR moondial stone
 
 
 // select main hand item
@@ -437,6 +443,10 @@ var main_hand_busy_message = ""
     activate L
   // Voidweaver devours an aether rune and your armor to unmake all nearby foes
   :?summon.GetId() = "voidweaver" & item.CanActivate() & item.GetCooldown("voidweaver") = 0 & foe.debuffs.string = unstable & foe.count >= math.Clamp(most_foes, 5, 9) // & armor < 10
+    >`0,@screen.h-2@,Voidweaver: Devouring aether to unmake foes
+    equipL aether talisman
+    activate voidweaver
+  :?summon.GetId() = "voidweaver" & item.CanActivate() & item.GetCooldown("voidweaver") = 0 & foe = boss & foe.count > 5
     >`0,@screen.h-2@,Voidweaver: Devouring aether to unmake foes
     equipL aether talisman
     activate voidweaver
@@ -488,7 +498,7 @@ var main_hand_busy_message = ""
       equipL triskelion
 
   // Use BFG against largest room of enemies
-  :?item.GetCooldown("blade") <= 0 & item.CanActivate() & foe.count >= math.Clamp(most_foes, 5, 10)
+  :?item.GetCooldown("blade") <= 0 & item.CanActivate() & foe.count >= math.Clamp(most_foes, 5, 10) & foe.distance <= 6
     main_hand_busy_time = time + 1
     main_hand_busy_message = "BFG: Calling Pallas (large crowd)"
     >`0,@screen.h-2@,@main_hand_busy_message@
@@ -541,7 +551,7 @@ var main_hand_busy_message = ""
   :?foe.getCount(foe.distance + 3) >= 3 & AttackWithSplash()
     >`0,@screen.h-2@,Attacking with splash
 
-  :?need_hp = true // & foe = boss
+  :?need_hp = true & foe ! immune_to_physical // & foe = boss
     >`0,@screen.h-2@,Attacking with life leech
     equipL vigor sword dL -big
 
@@ -581,7 +591,7 @@ var main_hand_busy_message = ""
   // ?foe = "Big A** Snail" & foe.distance > 10 & foe.distance < 26
   //   equip repeating crossbow
   ?foe = "Mr. Puff"
-    ?foe.distance < 10
+    ?foe.distance < 10 & foe.hp < foe.maxhp
       DodgeBackward()
     :
       equip repeating crossbow
@@ -632,8 +642,11 @@ var main_hand_busy_message = ""
 
 var ceiling_decorator_landing_time = -1
 ?loc = caustic_caves
-  ?loc.begin & item.potion ! defensive
-    brew stone + tar // defensive
+  // ?loc.begin & item.potion ! defensive
+  //   brew stone + tar // defensive
+  // challenge: defeat bolesh with berserk potion
+  ?loc.begin & item.potion ! berserk
+    brew wood + bronze // berserk
 
   ?foe = ceiling decorator
     ?foe.state = 33 & foe.time = 0
@@ -646,6 +659,8 @@ var ceiling_decorator_landing_time = -1
 
   ?foe = bolesh & foe.state > 1
     // melee
+    ?item.potion = berserk
+      activate potion
     ?foe.state = 142 & foe.debuffs.string ! debuff_chill & item.GetCooldown("mind") < Math.Clamp(foe.time - 10, 0, 1000)
       // ?foe.time = 10
         // loc.Pause()
@@ -672,12 +687,12 @@ var ceiling_decorator_landing_time = -1
       // equip ice crossbow
       equip repeating crossbow
 
-  // // challenge: defeat bolesh with blade
-  // ?foe = bolesh & foe.hp < 300
-  //   ?foe.distance > 10
-  //     equipR dashing
-  //   :
-  //     equip blade
+  // challenge: defeat bolesh with blade
+  ?foe = bolesh & foe.hp < 300 & loc.stars <= 10
+    ?foe.distance > 10
+      equipR dashing
+    :
+      equip blade
 
 
 ?loc = deadwood_valley

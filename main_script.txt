@@ -31,6 +31,9 @@ var most_foes = int.Parse(storage.Get(most_foes_key, "0"))
   storage.Set(most_foes_key, string.Format("{0}", most_foes))
 // most_foes = math.Clamp(most_foes, 1, 15)
 // >`@screen.w-20@,@screen.h-6@,Foes  = @foe.count@ / @most_foes@
+?key = ability1
+  storage.Delete(most_foes_key)
+  most_foes = 0
 
 
 func GetStrongElement()
@@ -57,9 +60,9 @@ func GetStrongWeapon()
     weapon = "hammer"
   :?foe.GetCount(foe.distance + 3) > 2
     weapon = "big sword"
-  :?foe ! immune_to_ranged & foe.count < 3 & foe ! ranged & foe.distance > 10
-    weapon = "repeating crossbow"
-    element = ""
+  // :?foe ! immune_to_ranged & foe.count < 3 & foe ! ranged & foe.distance > 10
+  //   weapon = "repeating crossbow"
+  //   element = ""
   :?foe = immune_to_ranged
     weapon = "-big sword"
 
@@ -100,11 +103,11 @@ func DashForward()
 var prevDodgeTime = 0
 ?loc.loop
   prevDodgeTime = 0
-// >`0,10,time since dodge: @time - prevDodgeTime@
+// >`0,10,time since dodge: @totaltime - prevDodgeTime@
 
 
 func DodgeForward()
-  ?time - prevDodgeTime < 30
+  ?totaltime - prevDodgeTime < 30
     return true
   ?buffs.string = invisibility
     return true
@@ -112,21 +115,21 @@ func DodgeForward()
     // TODO: be close enough for this to work
     return false
   :?DashForward()
-    prevDodgeTime = time
+    prevDodgeTime = totaltime
     return true
   :
     return false
 
 
 func DodgeBackward()
-  ?time - prevDodgeTime < 30
+  ?totaltime - prevDodgeTime < 30
     return true
   ?buffs.string = invisibility
     return true
   // the Mind Stone dodges backward when equipped
   ?item.GetCooldown("mind") <= 0 & item.CanActivate()
     equipL mind
-    prevDodgeTime = time
+    prevDodgeTime = totaltime
     return true
   :
     return false
@@ -134,25 +137,27 @@ func DodgeBackward()
 
 func DodgeEitherWay()
   // skip dodging if it has happened very recently
-  ?time - prevDodgeTime < 30
+  ?totaltime - prevDodgeTime < 30
     return true
   ?buffs.string = invisibility
     return true
   ?DodgeForward()
-    prevDodgeTime = time
+    prevDodgeTime = totaltime
     return true
   :?DodgeBackward()
-    prevDodgeTime = time
+    prevDodgeTime = totaltime
     return true
-  :?item.potion = invisibility & foe = boss
+  :?item.potion = invisibility & (foe = phase2 | foe = phase3)
     activate potion
-    prevDodgeTime = time
+    prevDodgeTime = totaltime
     return true
   :
     return false
 
 
 func AttackWithStun()
+  ?foe.damage <= 1
+    return false
   ?foe.debuffs.string = stun
     return false
   ?foe = immune_to_stun
@@ -206,7 +211,7 @@ func AttackWithSplash()
     equipL @element@ big sword *10
     return true
 
-  :?foe.distance <= 7 & foe ! immune_to_stun
+  :?foe.distance <= 7 & foe ! immune_to_stun & foe.debuffs.string ! stun & foe.damage > 1
     equip heavy hammer
     return true
 
@@ -229,38 +234,40 @@ func AttackWithSplash()
 
 
 func AttackWithDebuffs()
-  ?foe ! boss
+  ?!(foe = boss | buffs.string = smite)
     return false
   // ?foe = immune_to_debuff_damage
   //   return false
   // ?foe = morel
   //   return false
-  ?foe = poena
+  // ?foe = poena
+  //   return false
+  ?(loc = deadwood_valley & foe ! wasp & foe ! xyloalgia)
     return false
 
   var foe_debuffs = new Components/StatusString
   foe_debuffs.Init(foe.debuffs.string)
 
   // feeble debuff reduces damage done
-  ?item.GetCooldown("mask") <= 0 & item.CanActivate() & loc ! nagaraja & foe.distance < 25 & foe ! morel
+  ?item.GetCooldown("mask") <= 0 & item.CanActivate() & loc ! nagaraja & foe.distance < 25 & (foe.damage > 3 | buffs.string = smite) & foe ! morel
     equipR mask
     item.CanActivate("mask")
       activate R
       return true
   
   // poison debuff increases damage taken
-  :?foe_debuffs.GetCount("debuff_damage") < 1 & foe ! immune_to_debuff_damage
+  :?foe_debuffs.GetCount("debuff_damage") < 1 & foe ! immune_to_debuff_damage & foe ! immune_to_physical
     equipL poison -big sword dP *10
     return true
 
   // fire debuff applies damage over time
-  ?foe_debuffs.GetCount("debuff_dot") < 1 & foe ! immune_to_debuff_dot
+  ?foe_debuffs.GetCount("debuff_dot") < 1 & foe ! immune_to_debuff_dot & foe ! immune_to_physical
     equipL fire -big sword dF *10
     return true
 
   // ice debuff slows attack speed
   // :?foe.debuffs.string ! "debuff_chill:6"
-  :?foe_debuffs.GetCount("debuff_chill") < 4 & foe ! immune_to_debuff_chill & foe ! morel
+  :?foe_debuffs.GetCount("debuff_chill") < 4 & foe ! immune_to_debuff_chill & foe ! immune_to_physical & (foe.damage > 3 | buffs.string = smite) & foe ! morel
     equipL ice -big sword dI *10
     return true
 
@@ -314,6 +321,7 @@ var prev_time = 0
   >`@screen.w-20@,@screen.h-4@,Prev  = @prev_state@:@prev_time@
   >`@screen.w-20@,@screen.h-3@,State = @foe.state@:@foe.time@
   >`@screen.w-20@,@screen.h-6@,Foes  = @foe.count@ / @most_foes@
+  >`@screen.w-20@,@screen.h-7@,Damage= @foe.damage@
   ?encounter.isElite
     >`@screen.w-20@,@screen.h-7@,@encounter.eliteMod@
   //>`@screen.w-20@,@screen.h-5@,Foes = @foe.count@
@@ -322,6 +330,8 @@ var prev_time = 0
 
 var my_buffs = new Components/StatusString
 my_buffs.Init(buffs.string)
+var my_debuffs = new Components/StatusString
+my_debuffs.Init(debuffs.string)
 
 // var foe_desc
 // foe_desc = string.Split(foe)
@@ -339,7 +349,7 @@ var strong_summon
 :
   strong_summon = "aether"
 // Research: apply unstable to 32 foes
-strong_summon = "aether"
+// strong_summon = "aether"
 
 var strong_element
 strong_element = GetStrongElement()
@@ -362,9 +372,8 @@ var need_hp = false
 
 // >`0,@screen.h-6@,potion = @item.potion@
 
-//?hp < 15
-?hp < maxhp / 3 & foe.count > 0
-  ?item.potion = defensive | item.potion = heal
+?item.potion = defensive | item.potion = heal
+  ?foe.count > 0 & (hp < maxhp / 4 | hp <= foe.damage + my_debuffs.GetCount("debuff_damage"))
     // TODO: equip +life items
     activate potion
 
@@ -397,27 +406,27 @@ var main_hand_busy_message = ""
     // ?foe.distance > 10
     //   equipR vigor wand *10
     // :
-  :?need_hp = true & foe.distance < 10
-    >`0,@screen.h-3@,Vigor Shield ah: Heal when attacked
-    equipR vigor shield ah *10
   :?foe.GetCount(20) > foe.GetCount(6) & strong_element
     // gain armor when engaging
     >`0,@screen.h-3@,@strong_element@ Shield: Engage to gain armor
     equipR @strong_element@ shield *10
-  :?need_armor = true & armor > 0 & foe.distance <= 6
-    // conserve armor
-    >`0,@screen.h-3@,Towering Shield: Conserve armor
+  :?need_hp = true & foe.distance < 10 & (foe.state = 32)
+    >`0,@screen.h-3@,Vigor Shield ah: Heal when attacked
+    equipR vigor shield ah *10
+  :?need_armor = true & armor > 0 & foe.distance < 10 & (foe.state = 32)
+    // preserve armor
+    >`0,@screen.h-3@,Towering Shield: Preserve armor
     equipR towering shield *10
+  :?foe = ice & foe.distance < 10 & foe.damage < 8 & (foe = boss | foe.state = 32) & (foe ! dysangelos)
+    >`0,@screen.h-3@,Fire Talisman: Defend ice damage
+    equipR fire talisman
+  :?foe = fire & foe.distance < 10 & foe.damage < 8 & (foe = boss | foe.state = 32) & (foe ! dysangelos)
+    >`0,@screen.h-3@,Aether Talisman: Defend fire damage
+    equipR aether talisman
   :?need_armor = true | (foe.distance > 20 & ai.walking & armor < 14) | (foe = boss & foe.state <= 1)
     // regen armor
     >`0,@screen.h-3@,Compound Shield: Build armor
     equipR compound shield *10
-  :?foe = ice & foe.distance < 10 & foe.damage < 8
-    >`0,@screen.h-3@,Fire Talisman: Defend ice damage
-    equipR fire talisman
-  :?foe = fire & foe.distance < 10 & foe.damage < 8
-    >`0,@screen.h-3@,Aether Talisman: Defend fire damage
-    equipR aether talisman
   :?foe.distance < 10
     // moondial stone increases attack speed
     >`0,@screen.h-3@,Moondial Stone: Attack faster
@@ -433,6 +442,9 @@ var main_hand_busy_message = ""
   //   >`0,@screen.h-2@,@main_hand_busy_message@
   // :?item.right & item.right.state = 2
   //   >`0,@screen.h-2@,@main_hand_busy_message@
+
+  :?key = ability2
+    equipL sight
 
   // Aether Talisman: summon Voidweaver. The Voidweaver applies Unstable debuff
   :?summon.count = 0 & strong_summon = "aether" & item.CanActivate() & item.GetCooldown("aether_talisman") <= 0
@@ -465,11 +477,11 @@ var main_hand_busy_message = ""
     activate cinderwisp
 
   // Skeleton Arm: build pick_pocket buff
-  :?buffs.string ! "pick_pocket:5" & foe.distance <= 7 & foe ! immune_to_physical & foe ! bronze_guardian & foe ! enoki
+  :?buffs.string ! "pick_pocket:6" & foe.distance <= 7 & foe ! immune_to_physical & foe ! bronze_guardian & foe ! enoki
     >`0,@screen.h-2@,Skeleton Arm: Build pick_pocket buff
     equip Skeleton Arm
   // Skeleton Arm: steal whenever possible
-  :?item.GetCooldown("skeleton_arm") <= 0 & item.CanActivate() & buffs.string = "pick_pocket:5" & foe ! immune_to_physical & foe.distance <= 7 & foe.hp < 32
+  :?item.GetCooldown("skeleton_arm") <= 0 & item.CanActivate() & buffs.string = "pick_pocket:6" & foe ! immune_to_physical & foe.distance <= 7 & foe.hp < 32
     >`0,@screen.h-2@,Skeleton Arm: Picking pocket
     equip Skeleton Arm
     activate R
@@ -498,7 +510,7 @@ var main_hand_busy_message = ""
       equipL triskelion
 
   // Use BFG against largest room of enemies
-  :?item.GetCooldown("blade") <= 0 & item.CanActivate() & foe.count >= math.Clamp(most_foes, 5, 10) & foe.distance <= 6
+  :?item.GetCooldown("blade") <= 0 & item.CanActivate() & foe.count >= math.Clamp(most_foes, 5, 10) & foe.hp < 210 & foe.distance <= 10
     main_hand_busy_time = time + 1
     main_hand_busy_message = "BFG: Calling Pallas (large crowd)"
     >`0,@screen.h-2@,@main_hand_busy_message@
@@ -507,8 +519,8 @@ var main_hand_busy_message = ""
     activate R
     // screen.ResetOffset()
 
-  // Use BFG against boss whenever ready
-  :?item.GetCooldown("blade") <= 0 & item.CanActivate() & foe = boss & foe.distance < 25 & loc ! undead_crypt & foe ! hrimnir
+  // Use BFG against boss (phase2) whenever ready
+  :?item.GetCooldown("blade") <= 0 & item.CanActivate() & (foe = phase2 | foe = phase3) & foe.distance < 25 & loc ! undead_crypt & foe ! hrimnir
     main_hand_busy_time = time + 1
     main_hand_busy_message = "BFG: Calling Pallas"
     >`0,@screen.h-2@,@main_hand_busy_message@
@@ -516,7 +528,7 @@ var main_hand_busy_message = ""
     activate R
 
   // Call Nagaraja
-  :?item.GetCooldown("mask") <= 0 & item.CanActivate() & loc ! nagaraja & foe.distance < 25 & foe ! poena & foe ! scarab & (foe = boss | (buffs.string = smite & foe.hp <= (8 + 4.7*my_buffs.GetCount("smite"))))
+  :?item.GetCooldown("mask") <= 0 & item.CanActivate() & loc ! nagaraja & foe.distance < 25 & (loc ! deadwood_valley | foe = wasp | foe = xyloalgia) & (buffs.string = smite & (foe.count >= 4 | foe.hp >= 4 * (8 + 45))) // (8 + 4.7*my_buffs.GetCount("smite")))) // & foe ! poena & foe ! scarab 
     main_hand_busy_time = time + 1
     main_hand_busy_message = "Cultist Mask: Calling Nagaraja"
     >`0,@screen.h-2@,@main_hand_busy_message@
@@ -619,8 +631,9 @@ var main_hand_busy_message = ""
       DodgeBackward()
     :?foe.hp < foe.maxhp & foe.distance > 10
       equip repeating crossbow
-  ?foe = bronze_guardian
-    ?loc.stars >= 12 & item.potion = lucky & time > 2500 & foe.hp > 2500
+  ?foe = bronze_guardian & foe.state > 1
+    // ?loc.stars >= 12 & item.potion = lucky & time > 2500 & foe.hp > 2500
+    ?item.potion = lucky & foe.distance <= 3 & foe.armor > 10000
       activate potion
     // equipL aether hammer
     // equipR vigor shield
@@ -635,6 +648,8 @@ var main_hand_busy_message = ""
     //   >`0,@screen.h-2@,@main_hand_busy_message@
     //   equip heavy hammer
     //   activate R
+    :?foe.state = 33 & foe.distance > 10
+      DashForward()
     :?foe.state ! 33
       // >`0,@screen.h-2@,Fighting Bronze Guardian at range
       equip aether crossbow
@@ -642,11 +657,13 @@ var main_hand_busy_message = ""
 
 var ceiling_decorator_landing_time = -1
 ?loc = caustic_caves
-  // ?loc.begin & item.potion ! defensive
-  //   brew stone + tar // defensive
+  ?loc.begin & item.potion ! defensive
+    brew stone + tar // defensive
   // challenge: defeat bolesh with berserk potion
-  ?loc.begin & item.potion ! berserk
-    brew wood + bronze // berserk
+  // ?loc.begin & item.potion ! berserk
+  //   brew wood + bronze // berserk
+  // ?loc.begin & item.potion ! lucky
+  //   brew stone + bronze // lucky
 
   ?foe = ceiling decorator
     ?foe.state = 33 & foe.time = 0
@@ -688,7 +705,7 @@ var ceiling_decorator_landing_time = -1
       equip repeating crossbow
 
   // challenge: defeat bolesh with blade
-  ?foe = bolesh & foe.hp < 300 & loc.stars <= 10
+  ?foe = bolesh & foe.hp < 350 & loc.stars <= 15
     ?foe.distance > 10
       equipR dashing
     :
@@ -698,15 +715,15 @@ var ceiling_decorator_landing_time = -1
 ?loc = deadwood_valley
   ?loc.begin & item.potion ! invisibility
     brew stone + wood // invisibility
-  ?foe = wasp & foe.distance <= 22
+  ?foe = wasp & foe.distance <= 10
     equip repeating crossbow
     // equip fire crossbow
   ?foe = xyloalgia & foe.state > 1
-    // ?foe.state = 33 & foe.time = 10 & foe.distance >= 10
-    //   DodgeForward()
+    ?foe.state = 33 & foe.time >= 10 & foe.distance >= 10
+      DodgeForward()
     // :?foe.state = 33 & foe.time = 10 & foe.distance < 10
     //   DodgeBackward()
-    ?foe.distance >= 10 
+    :?foe.distance >= 10 
       equip repeating crossbow
   ?foe = poena
     // ?foe.distance > 16
@@ -715,7 +732,7 @@ var ceiling_decorator_landing_time = -1
       equip repeating crossbow
     // :
     //   equip bardiche
-    ?foe.state = 32 & foe.time = 41
+    ?foe.state = 32 & foe.time >= 41
       DodgeEitherWay()
       // ?item.GetCooldown("mind") <= 0 & buffs.string ! invisibility
       //   equipL mind
@@ -792,12 +809,15 @@ var ceiling_decorator_landing_time = -1
 //    activate potion
 
 // Legend: Transmutable Trials
-// ?foe = pallas
-//   equipL broken talisman
-//   equipL big vigor sword
-//   equipL ice
+// ?foe = pallas & foe.distance <= 6 & (foe.state = 32 | foe.state = 33) // & item.right = shield 
+//   equipR broken talisman
+  // equipL big vigor sword
+  // equipL ice
 
 
 // // Legend: Summer Moonstice: warm stone event
 // ?foe.distance > 7 & foe.distance < 25 & foe ! ranged & foe ! immune_to_ranged & foe ! immune_to_physical
 //     equipL stone
+
+// ?foe = arachnid & foe = poison
+//   equipL sight
